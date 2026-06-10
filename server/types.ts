@@ -195,6 +195,7 @@ export const LlmSettingsUpdate = z.object({
   serper_api_key: z.string().default(""),
   brave_search_api_key: z.string().default(""),
   ui_theme: UiTheme.default("agent_warm_paper"),
+  workspace_path: z.string().default(""),
 });
 export type LlmSettingsUpdate = z.infer<typeof LlmSettingsUpdate>;
 

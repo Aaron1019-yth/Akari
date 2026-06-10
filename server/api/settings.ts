@@ -24,6 +24,7 @@ router.get("/", (_req: Request, res: Response) => {
     brave_search_api_key_masked: maskKey(s.braveSearchApiKey),
     brave_search_api_key_is_set: Boolean(s.braveSearchApiKey),
     ui_theme: s.uiTheme,
+    workspace_path: s.workspacePath,
   });
 });
 
@@ -40,6 +41,7 @@ router.put("/", (req: Request, res: Response) => {
   const newTavilyKey = resolveApiKey(payload.tavily_api_key, current.tavilyApiKey);
   const newSerperKey = resolveApiKey(payload.serper_api_key, current.serperApiKey);
   const newBraveKey = resolveApiKey(payload.brave_search_api_key, current.braveSearchApiKey);
+  const newWorkspacePath = payload.workspace_path?.trim() || current.workspacePath;
 
   saveSettings({
     apiKey: newApiKey,
@@ -49,7 +51,7 @@ router.put("/", (req: Request, res: Response) => {
     serperApiKey: newSerperKey,
     braveSearchApiKey: newBraveKey,
     uiTheme: payload.ui_theme,
-    workspacePath: current.workspacePath,
+    workspacePath: newWorkspacePath,
   });
 
   const s = getSettings();
@@ -65,6 +67,7 @@ router.put("/", (req: Request, res: Response) => {
     brave_search_api_key_masked: maskKey(s.braveSearchApiKey),
     brave_search_api_key_is_set: Boolean(s.braveSearchApiKey),
     ui_theme: s.uiTheme,
+    workspace_path: s.workspacePath,
   });
 });
 
