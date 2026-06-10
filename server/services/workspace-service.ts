@@ -43,13 +43,18 @@ export function ensureWorkspace(): string {
   return wp;
 }
 
+const PATH_SEP_RE = /[/\\]/;
+
 function resolveSafe(relPath: string): string {
   const root = path.resolve(getWorkspacePath());
-  if (relPath.split(path.sep).some(seg => seg === "..")) {
+  // Split on both / and \ to catch all path traversal attempts
+  const segments = relPath.split(PATH_SEP_RE);
+  if (segments.some(seg => seg === "..")) {
     throw new WorkspaceError("路径包含非法字符");
   }
   const target = path.resolve(root, relPath);
-  if (!target.startsWith(root + path.sep) && target !== root) {
+  const rel = path.relative(root, target);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new WorkspaceError("路径越界");
   }
   return target;
@@ -59,13 +64,19 @@ function isHidden(name: string): boolean {
   return HIDDEN_PATTERNS.some(p => p.test(name));
 }
 
+function mtimeStr(stat: fs.Stats): string {
+  return stat.mtime.toISOString().substring(0, "YYYY-MM-DDTHH:mm:ss".length);
+}
+
 export function listTree(dirRel: string = ""): FileNode[] {
+  // Sandbox check
+  if (dirRel) resolveSafe(dirRel);
   const root = getWorkspacePath();
   const currentDir = path.join(root, dirRel);
   if (!fs.existsSync(currentDir)) return [];
 
   const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    .filter(e => !isHidden(e.name))
+    .filter(e => !isHidden(e.name) && !e.isSymbolicLink())
     .sort((a, b) => {
       if (a.isDirectory() && !b.isDirectory()) return -1;
       if (!a.isDirectory() && b.isDirectory()) return 1;
@@ -82,7 +93,7 @@ export function listTree(dirRel: string = ""): FileNode[] {
       type: entry.isDirectory() ? "directory" : "file",
       path: relPath,
       size: entry.isFile() ? stat.size : 0,
-      modified_at: stat.mtime.toISOString().slice(0, 19),
+      modified_at: mtimeStr(stat),
       children: null,
     };
 
@@ -114,19 +125,41 @@ export async function readFile(relPath: string): Promise<FileContent> {
 
   if (ext === ".pdf") {
     const dataBuffer = fs.readFileSync(absPath);
-    const pdfParse = (await import("pdf-parse")).default;
-    const pdfData = await pdfParse(dataBuffer);
-    const text = (pdfData.text || "").trim();
-    return { content: text, mime: "application/pdf", truncated: false };
+    try {
+      const pdfParse = (await import("pdf-parse")).default;
+      const pdfData = await pdfParse(dataBuffer);
+      const text = (pdfData.text || "").trim();
+      return { content: text, mime: "application/pdf", truncated: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Cannot find module")) {
+        throw new WorkspaceError("读取 PDF 需要安装 pdf-parse 依赖");
+      }
+      throw new WorkspaceError(`PDF 解析失败: ${msg}`);
+    }
   }
 
   if (ext === ".docx") {
-    const mammoth = (await import("mammoth")).default;
-    const result = await mammoth.extractRawText({ path: absPath });
-    return { content: (result.value || "").trim(), mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", truncated: false };
+    try {
+      const mammoth = (await import("mammoth")).default;
+      const result = await mammoth.extractRawText({ path: absPath });
+      return { content: (result.value || "").trim(), mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", truncated: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Cannot find module")) {
+        throw new WorkspaceError("读取 DOCX 需要安装 mammoth 依赖");
+      }
+      throw new WorkspaceError(`DOCX 解析失败: ${msg}`);
+    }
+  }
+
+  // Skip oversize files before reading into memory
+  if (stat.size > MAX_TEXT_SIZE * 2) {
+    throw new WorkspaceError("文件过大，无法预览");
   }
 
   const buf = fs.readFileSync(absPath);
+  // TODO: UTF-16LE/UTF-16BE text files contain null bytes and are falsely rejected
   if (buf.includes(0)) {
     throw new WorkspaceError("不支持预览二进制文件");
   }
@@ -185,7 +218,7 @@ export function saveUpload(filename: string, buffer: Buffer): FileNode {
     type: "file",
     path: safe,
     size: stat.size,
-    modified_at: stat.mtime.toISOString().slice(0, 19),
+    modified_at: mtimeStr(stat),
     children: null,
   };
 }
