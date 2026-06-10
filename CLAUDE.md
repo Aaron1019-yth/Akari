@@ -1,11 +1,11 @@
 # Akari — 考公备考 Agent
 
-Python/FastAPI 后端 + React/Vite 前端 + Electron 桌面壳。
+Node.js/TypeScript 后端 + React/Vite 前端 + Electron 桌面壳。
 
 ## 技术栈
 
-- Python 3.13 + FastAPI + SQLAlchemy + SQLite
-- Node 24 + Electron 42 + React 19 + Vite 7 + TypeScript 5.9
+- Node 24 + TypeScript 5.9 + Express + better-sqlite3 + Zod
+- React 19 + Vite 7 + Electron 42
 - DeepSeek API（OpenAI 兼容 `/chat/completions`）
 
 ## 启动
@@ -22,7 +22,7 @@ npm run dev:desktop  # Electron 桌面版
 
 ```bash
 npm run build       # tsc + vite
-npm run test:api    # pytest
+npm run test:api    # vitest
 ```
 
 ## 环境变量
@@ -38,40 +38,55 @@ Settings UI 存储在 `.akari/config.json`，优先级：config.json > env var >
 ## 项目结构
 
 ```
-backend/
-├── main.py              # FastAPI 入口
-├── api/                 # chat, planner, practice, profile, settings, files
+server/
+├── main.ts              # Express + WebSocket 入口
+├── db.ts                # better-sqlite3 连接 + 8 张表 schema
+├── types.ts             # Zod schemas + DB row interfaces
+├── api/                 # planner, chat, practice, profile, settings, sessions, files
 ├── services/
-│   ├── agent/           # loop.py, context.py
-│   ├── llm/             # client.py, schemas.py
-│   ├── tools/           # base.py, registry.py, planner.py
-│   ├── planner_service.py
-│   └── settings_service.py
-├── db/                  # database.py, models.py (8 tables)
-└── schemas.py           # Pydantic models
+│   ├── agent-context.ts # 系统提示词
+│   ├── agent-loop.ts    # Agent 编排循环（max 8 rounds）
+│   ├── intent.ts        # Intent 分类器（7 字段诊断状态机）
+│   ├── llm-types.ts     # Message, ToolCall, TokenUsage
+│   ├── llm-client.ts    # DeepSeek HTTP/SSE 客户端
+│   ├── tool-registry.ts # Tool 注册表
+│   ├── tools/
+│   │   ├── planner.ts   # 6 个 planner tools
+│   │   ├── web.ts       # web_search + web_fetch
+│   │   ├── document.ts  # read_document
+│   │   └── generate-plan.ts  # generate_plan tool
+│   ├── planner-service.ts
+│   ├── practice-service.ts
+│   ├── profile-service.ts
+│   ├── settings-service.ts
+│   ├── chat-service.ts  # JSONL 会话持久化
+│   └── files-service.ts
+└── __tests__/           # Vitest
 
 desktop/src/react/
-├── App.tsx              # 单体 UI 组件
+├── App.tsx
+├── components/          # Titlebar, Sidebar, ChatPanel, Workbench, SettingsModal, ErrorBoundary
 ├── services/api.ts      # REST + WebSocket 客户端
-└── styles.css
+└── utils.ts
 
-shared/exam-schema.ts    # 前端类型镜像
+shared/exam-schema.ts    # 前后端共享类型
 ```
 
 ## 关键设计决策
 
-- **三层 Agent 架构**：`llm/`（API 调用）→ `tools/`（纯函数）→ `agent/`（编排循环），互不知道对方内部实现
-- **WebSocket 流式对话**：`/api/chat/ws`，支持 text_delta / tool_start / tool_end / turn_end / error 事件
-- **Tool calling**：6 个 planner tools + schema 校验在 AgentLoop 层（不在 tool 内部）
+- **三层 Agent 架构**：`llm-client`（API 调用）→ `tools/`（纯函数）→ `agent-loop`（编排循环），互不知道对方内部实现
+- **WebSocket 流式对话**：`/api/chat/ws`，支持 text_delta / tool_start / tool_end / turn_end / plan_card / error 事件
+- **Tool calling**：10 个 tools + schema 校验在 AgentLoop 层
 - **设置持久化**：`.akari/config.json`，运行时覆盖 env var
 - **JSONL 会话**：`.akari/memory/sessions/{session_id}.jsonl`
 - **系统提示词**：静态前缀（角色 + 工具纪律）+ 当前时间，用户状态通过 tool 动态查询
+- **数据库**：SQLite `.akari/akari.db`，better-sqlite3 同步 API，WAL 模式
 
 ## 红线
 
 - 不删除 `.akari/` 下任何文件
 - 不修改 `.env` / `.akari/config.json` 中的 api_key
-- 不做数据库 schema 迁移（当前用 `Base.metadata.create_all`）
+- 不做数据库 schema 迁移（当前用 `CREATE TABLE IF NOT EXISTS`）
 - 不搬运 Hanako 原项目的 UI/Electron/后端代码（clean-room 项目）
 - 密钥不进代码、不进 commit
 
@@ -82,5 +97,4 @@ shared/exam-schema.ts    # 前端类型镜像
 | `docs/HANDOFF.md` | 交接文稿：当前状态、已验证流程、待完成项 |
 | `docs/superpowers/specs/2026-06-10-phase1-mvp-design.md` | **Phase 1–3 规格**（当前路线图） |
 | `docs/superpowers/specs/2026-06-09-exam-agent-design.md` | 总体技术设计、数据模型、版权策略 |
-| `docs/superpowers/specs/exam-domain-model.md` | API 契约 + 领域模型 |
-| `docs/superpowers/specs/ORIGINALITY.md` | 原创性审计边界 |
+| `docs/superpowers/plans/2026-06-10-backend-nodejs-migration.md` | 后端迁移计划 |

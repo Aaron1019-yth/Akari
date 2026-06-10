@@ -1,1 +1,0 @@
-"""Akari backend package."""
