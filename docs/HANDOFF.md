@@ -3,16 +3,16 @@
 Last updated: 2026-06-10
 
 > **当前路线图**：`docs/superpowers/specs/2026-06-10-phase1-mvp-design.md`（Phase 1–3 完整规格）。
-> **阶段状态**：Phase 1 对话式规划教练 MVP 已完成。Phase 1.5 功能收尾已完成（2026-06-10）。Phase 2 未开始，Phase 4（UI 打磨）为以后阶段。验收记录见 `docs/PHASE_COMPLETION_LOG.md`。
+> **阶段状态**：Phase 1 对话式规划教练 MVP 已完成。Phase 1.5 功能收尾已完成（2026-06-10）。后端已从 Python/FastAPI 迁移到 Node.js/TypeScript（2026-06-10）。Phase 2 未开始。验收记录见 `docs/PHASE_COMPLETION_LOG.md`。
 
 ## Project State
 
 Akari is a clean-room exam preparation desktop app. The current MVP has:
 
 - React/Vite frontend with streaming chat UI.
-- Electron shell that spawns the Python backend in desktop mode.
-- FastAPI backend on `127.0.0.1:8742`.
-- SQLite database at `.akari/akari.db`.
+- Electron shell for desktop mode.
+- **Node.js/TypeScript backend** (Express + ws) on `127.0.0.1:8742`.
+- SQLite database at `.akari/akari.db` (better-sqlite3).
 - Planner/task/profile domain models.
 - Right workbench with total plan card, daily plan, weekly plan, task completion, and pomodoro actual-time recording.
 - Center chat panel with full DeepSeek Agent via WebSocket streaming (tool-calling, abort, streaming text).
@@ -41,8 +41,6 @@ Env vars serve as **defaults** — they can be overridden via the Settings UI at
 Install:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt pytest
 npm install --legacy-peer-deps
 ```
 
@@ -70,26 +68,29 @@ npm run test:api
 
 ## Important Files
 
-- `backend/main.py`: FastAPI app composition.
-- `backend/api/planner.py`: planner/task endpoints.
-- `backend/api/chat.py`: WebSocket `/api/chat/ws` + legacy `POST /api/chat`.
-- `backend/db/models.py`: SQLAlchemy tables.
-- `backend/services/planner_service.py`: rule-based plan generation, task create/update/adapt.
-- `backend/services/chat_service.py`: local JSONL chat persistence and stub response.
+- `server/main.ts`: Express + WebSocket entry point.
+- `server/db.ts`: better-sqlite3 connection + 8-table schema.
+- `server/types.ts`: Zod schemas + DB row interfaces.
+- `server/api/planner.ts`: planner/task endpoints.
+- `server/api/chat.ts`: WebSocket `/api/chat/ws` + legacy `POST /api/chat`.
+- `server/services/planner-service.ts`: rule-based plan generation, task create/update/adapt.
+- `server/services/chat-service.ts`: local JSONL chat persistence.
 - **Agent layer:**
-  - `backend/services/llm/schemas.py`: `Message`, `ToolCall`, `TokenUsage` dataclasses.
-  - `backend/services/llm/client.py`: DeepSeek HTTP/SSE client (`chat()` + `chat_stream()`).
-  - `backend/services/tools/base.py`: `Tool` + `ToolResult` dataclasses.
-  - `backend/services/tools/registry.py`: `ToolRegistry` — register, schema export, execute with error handling.
-  - `backend/services/tools/planner.py`: 6 planner tools (context, tasks, create/update, stats).
-  - `backend/services/agent/context.py`: `build_system_prompt()` — static identity prefix + dynamic planner suffix.
-  - `backend/services/agent/loop.py`: `AgentLoop` — streaming orchestration with abort support, max 8 rounds.
-  - `backend/services/settings_service.py`: settings persistence to `.akari/config.json`, in-memory cache, key masking.
-  - `backend/api/settings.py`: `GET/PUT /api/settings` for reading/updating LLM configuration.
+  - `server/services/llm-types.ts`: `Message`, `ToolCall`, `TokenUsage` interfaces.
+  - `server/services/llm-client.ts`: DeepSeek HTTP/SSE client (`chat()` + `chatStream()`).
+  - `server/services/tool-registry.ts`: `ToolRegistry` — register, schema export, execute with error handling.
+  - `server/services/tools/planner.ts`: 6 planner tools (context, tasks, create/update, stats).
+  - `server/services/tools/web.ts`: `web_search` + `web_fetch` tools.
+  - `server/services/tools/document.ts`: `read_document` tool.
+  - `server/services/tools/generate-plan.ts`: `generate_plan` tool + diagnostic→plan pipeline.
+  - `server/services/agent-context.ts`: `buildSystemPrompt()` — static identity prefix + current time.
+  - `server/services/agent-loop.ts`: `AgentLoop` — streaming orchestration with abort support, max 8 rounds.
+  - `server/services/intent.ts`: `IntentClassifier` — 7-field diagnostic state machine.
+  - `server/services/settings-service.ts`: settings persistence to `.akari/config.json`, in-memory cache, key masking.
 - `desktop/src/react/App.tsx`: main UI, chat, right workbench, resize handles, streaming messages, abort button.
 - `desktop/src/react/services/api.ts`: frontend API client + `createChatStream()` WebSocket client.
-- `shared/exam-schema.ts`: TypeScript domain contract mirror.
-- `tests/test_backend_smoke.py`: current backend smoke coverage.
+- `shared/exam-schema.ts`: TypeScript domain contract (shared types).
+- `server/__tests__/`: Vitest test suite.
 
 ## Verified Flows
 
