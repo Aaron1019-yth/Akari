@@ -12,6 +12,7 @@ const DEFAULTS: Record<string, string> = {
   serper_api_key: process.env["SERPER_API_KEY"] || "",
   brave_search_api_key: process.env["BRAVE_SEARCH_API_KEY"] || "",
   ui_theme: process.env["AKARI_UI_THEME"] || "agent_warm_paper",
+  workspace_path: process.env["AKARI_WORKSPACE_PATH"] || "",
 };
 
 export interface LlmSettings {
@@ -22,6 +23,7 @@ export interface LlmSettings {
   serperApiKey: string;
   braveSearchApiKey: string;
   uiTheme: string;
+  workspacePath: string;
 }
 
 let cache: LlmSettings | null = null;
@@ -44,6 +46,7 @@ export function getSettings(): LlmSettings {
     serperApiKey: fileData["serper_api_key"] || DEFAULTS["serper_api_key"]!,
     braveSearchApiKey: fileData["brave_search_api_key"] || DEFAULTS["brave_search_api_key"]!,
     uiTheme: fileData["ui_theme"] || DEFAULTS["ui_theme"]!,
+    workspacePath: fileData["workspace_path"] || DEFAULTS["workspace_path"]!,
   };
   return cache;
 }
@@ -61,6 +64,7 @@ export function saveSettings(s: LlmSettings): void {
         serper_api_key: s.serperApiKey,
         brave_search_api_key: s.braveSearchApiKey,
         ui_theme: s.uiTheme,
+        workspace_path: s.workspacePath,
       },
       null,
       2,

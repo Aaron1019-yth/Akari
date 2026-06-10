@@ -49,6 +49,7 @@ router.put("/", (req: Request, res: Response) => {
     serperApiKey: newSerperKey,
     braveSearchApiKey: newBraveKey,
     uiTheme: payload.ui_theme,
+    workspacePath: current.workspacePath,
   });
 
   const s = getSettings();
