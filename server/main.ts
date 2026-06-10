@@ -51,9 +51,12 @@ setupWebSocket(wss);
 // Initialize database on startup
 initDatabase();
 
-const PORT = parseInt(process.env.PORT || "8742", 10);
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`Akari API running on http://127.0.0.1:${PORT}`);
-});
+// Skip listening in test mode — supertest handles the app directly
+if (!process.env.AKARI_TEST) {
+  const PORT = parseInt(process.env.PORT || "8742", 10);
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`Akari API running on http://127.0.0.1:${PORT}`);
+  });
+}
 
 export { app, wss };

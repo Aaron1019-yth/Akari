@@ -2,7 +2,10 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-export const DATA_DIR = path.resolve(process.cwd(), ".akari");
+export const DATA_DIR = path.resolve(
+  process.cwd(),
+  process.env.AKARI_DATA_DIR || ".akari"
+);
 const DB_PATH = path.join(DATA_DIR, "akari.db");
 
 // Ensure directory exists before creating database
