@@ -1,0 +1,39 @@
+{
+  "name": "akari",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:api": ".venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8742 --reload",
+    "dev:desktop": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:api": ".venv/bin/python -m pytest",
+    "lint": "eslint 'desktop/src/**/*.{ts,tsx}'",
+    "format": "prettier --write 'desktop/src/**/*.{ts,tsx,css}'"
+  },
+  "main": "desktop/src/main/bootstrap.cjs",
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^42.3.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.8.4",
+    "typescript": "^5.9.0",
+    "wait-on": "^8.0.0"
+  }
+}

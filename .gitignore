@@ -1,0 +1,7 @@
+.DS_Store
+.akari/
+.venv/
+node_modules/
+dist/
+*.pyc
+__pycache__/
