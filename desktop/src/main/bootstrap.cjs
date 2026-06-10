@@ -90,9 +90,8 @@ function startBackend() {
   });
   probe.on("error", () => {
     probe.destroy();
-    const venvPython = path.join(projectRoot, ".venv", "bin", "python");
-    const python = fs.existsSync(venvPython) ? venvPython : "python3";
-    backendProcess = spawn(python, ["-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8742"], {
+    const tsx = path.join(projectRoot, "node_modules", ".bin", "tsx");
+    backendProcess = spawn(tsx, ["server/main.ts"], {
       cwd: projectRoot,
       stdio: "inherit",
     });

@@ -17,6 +17,7 @@ import type {
   WeeklyPlanOut,
   DailyTaskOut,
 } from "../types.js";
+import { serializeProfile } from "./profile-service.js";
 
 // ── Constants ──
 
@@ -28,12 +29,6 @@ const TRACKS = [
 
 function id(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
-
-// ── Stub (replaced by profile-service.ts in Task 5) ──
-
-function serializeProfile(_profile: StudentProfileRow | undefined): null {
-  return null;
 }
 
 // ── Date helpers ──
