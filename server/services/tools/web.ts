@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import { getSettings } from "../settings-service.js";
 import type { ToolDef, ToolResult } from "../llm-types.js";
 
@@ -10,7 +11,10 @@ function unescapeHtml(text: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)));
 }
 
 function htmlToText(raw: string): string {
@@ -24,21 +28,48 @@ function htmlToText(raw: string): string {
   return unescapeHtml(s).trim();
 }
 
-// ── Private host check ──
+// ── Private host check (mirrors Python _is_private_host with DNS resolution) ──
 
-function isPrivateHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  // localhost
-  if (lower === "localhost" || lower === "localhost.localdomain") return true;
-  // IPv4 loopback / private ranges
-  if (/^127\./.test(lower)) return true;
-  if (/^10\./.test(lower)) return true;
-  if (/^192\.168\./.test(lower)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(lower)) return true;
-  // IPv6 loopback
-  if (lower === "::1" || lower === "[::1]") return true;
-  if (lower === "0.0.0.0") return true;
+function isPrivateIP(ip: string): boolean {
+  if (ip === "127.0.0.1" || ip === "::1" || ip === "0.0.0.0" || ip === "::") return true;
+  // IPv4 private ranges
+  const v4Parts = ip.split(".");
+  if (v4Parts.length === 4) {
+    const [a, b] = [parseInt(v4Parts[0]), parseInt(v4Parts[1])];
+    if (a === 10) return true;                       // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;          // 192.168.0.0/16
+    if (a === 169 && b === 254) return true;          // 169.254.0.0/16 link-local
+    if (a === 127) return true;                       // 127.0.0.0/8 loopback
+    return false;
+  }
+  // IPv6 private ranges
+  const lower = ip.toLowerCase();
+  if (lower === "::1") return true;
+  if (lower.startsWith("fe8") || lower.startsWith("fe9") ||
+      lower.startsWith("fea") || lower.startsWith("feb")) return true; // fe80::/10 link-local
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;   // fc00::/7 unique local
   return false;
+}
+
+async function isPrivateHost(hostname: string): Promise<boolean> {
+  // Quick check: localhost by name
+  const lower = hostname.toLowerCase();
+  if (lower === "localhost" || lower === "localhost.localdomain") return true;
+  // Quick check: raw IPv4/IPv6 in hostname
+  if (isPrivateIP(lower)) return true;
+
+  // DNS resolution (mirrors Python socket.getaddrinfo)
+  try {
+    const results = await lookup(hostname, { all: true, family: 0 });
+    for (const addr of results) {
+      if (isPrivateIP(addr.address)) return true;
+    }
+    return false;
+  } catch {
+    // DNS resolution failure → treat as private (mirrors Python gaierror → True)
+    return true;
+  }
 }
 
 // ── Search providers ──
@@ -238,59 +269,52 @@ async function webFetch(
     return { content: "URL 必须是完整的 http(s) 地址。", ok: false };
   }
 
-  if (isPrivateHost(parsed.hostname)) {
+  if (await isPrivateHost(parsed.hostname)) {
     return {
       content: "出于安全限制，不能读取内网或本机地址。",
       ok: false,
     };
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
 
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Akari/0.1" },
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Akari/0.1" },
+    redirect: "follow",
+    signal: controller.signal,
+  });
+  clearTimeout(timeout);
 
-    const ctype = response.headers.get("content-type") || "";
+  const ctype = response.headers.get("content-type") || "";
 
-    let text: string;
-    if (ctype.includes("application/json")) {
-      const json = (await response.json()) as unknown;
-      text = JSON.stringify(json, null, 2);
-    } else {
-      const raw = await response.text();
-      text =
-        ctype.includes("html") || raw.slice(0, 500).toLowerCase().includes("<html")
-          ? htmlToText(raw)
-          : raw;
-    }
-
-    const truncated = text.length > maxLength;
-    text = text.slice(0, maxLength);
-    if (truncated) {
-      text += "\n\n[内容已截断]";
-    }
-
-    return {
-      content: text,
-      details: {
-        url,
-        status_code: response.status,
-        truncated,
-      },
-      ok: true,
-    };
-  } catch (err) {
-    return {
-      content: `获取 URL 失败: ${err instanceof Error ? err.message : String(err)}`,
-      ok: false,
-    };
+  let text: string;
+  if (ctype.includes("application/json")) {
+    const json = (await response.json()) as unknown;
+    text = JSON.stringify(json, null, 2);
+  } else {
+    const raw = await response.text();
+    text =
+      ctype.includes("html") || raw.slice(0, 500).toLowerCase().includes("<html")
+        ? htmlToText(raw)
+        : raw;
   }
+
+  const truncated = text.length > maxLength;
+  text = text.slice(0, maxLength);
+  if (truncated) {
+    text += "\n\n[内容已截断]";
+  }
+
+  return {
+    content: text,
+    details: {
+      url,
+      status_code: response.status,
+      truncated,
+    },
+    ok: true,
+  };
 }
 
 // ── Factory ──

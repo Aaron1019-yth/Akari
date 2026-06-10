@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { db, DATA_DIR } from "../../db.js";
+import { db } from "../../db.js";
 import { getActiveGoal, buildPlanCard } from "../planner-service.js";
 import { recalculateProfile } from "../profile-service.js";
 import type { ToolDef, ToolResult } from "../llm-types.js";
@@ -154,101 +154,110 @@ function generatePlan(weekStart: string, tasks: Record<string, unknown>[]): Tool
     };
   }
 
-  const goal = ensureGoal();
+  try {
+    const writePlan = db.transaction(() => {
+      const goal = ensureGoal();
 
-  // Load all modules for this goal
-  const allModules = db.prepare(
-    `SELECT m.* FROM modules m
-     JOIN tracks t ON m.track_id = t.id
-     WHERE t.goal_id = ?`
-  ).all(goal.id) as ModuleRow[];
+      // Load all modules for this goal
+      const allModules = db.prepare(
+        `SELECT m.* FROM modules m
+         JOIN tracks t ON m.track_id = t.id
+         WHERE t.goal_id = ?`,
+      ).all(goal.id) as ModuleRow[];
 
-  const weekEnd = new Date(plan.week_start + "T00:00:00");
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekEndStr = toDateStr(weekEnd);
+      const weekEnd = new Date(plan.week_start + "T00:00:00");
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEndStr = toDateStr(weekEnd);
 
-  // Delete old plans for same week_start
-  const oldPlans = db.prepare(
-    "SELECT * FROM weekly_plans WHERE goal_id = ? AND week_start = ?"
-  ).all(goal.id, plan.week_start) as WeeklyPlanRow[];
-  for (const old of oldPlans) {
-    db.prepare("DELETE FROM weekly_plans WHERE id = ?").run(old.id);
-  }
+      // Delete old plans for same week_start (FK → delete tasks first if needed)
+      const oldPlans = db.prepare(
+        "SELECT * FROM weekly_plans WHERE goal_id = ? AND week_start = ?",
+      ).all(goal.id, plan.week_start) as WeeklyPlanRow[];
+      for (const old of oldPlans) {
+        db.prepare("DELETE FROM daily_tasks WHERE weekly_plan_id = ?").run(old.id);
+        db.prepare("DELETE FROM weekly_plans WHERE id = ?").run(old.id);
+      }
 
-  // Create weekly plan
-  const weekId = genId("week");
-  const focusAreas = [...new Set(plan.tasks.map((t) => t.subject))].sort();
-  db.prepare(
-    `INSERT INTO weekly_plans (id, goal_id, week_start, week_end, focus_areas_json, target_correct_rate, summary)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    weekId,
-    goal.id,
-    plan.week_start,
-    weekEndStr,
-    JSON.stringify(focusAreas),
-    0.72,
-    "由 Akari 对话教练生成的本周计划。",
-  );
-
-  // Create tasks
-  for (let index = 0; index < plan.tasks.length; index++) {
-    const task = plan.tasks[index];
-
-    // Module resolution: try module_id first, then name match, then first module
-    let module: ModuleRow | undefined;
-    if (task.module_id) {
-      module = db.prepare("SELECT * FROM modules WHERE id = ?").get(task.module_id) as
-        | ModuleRow
-        | undefined;
-    }
-    if (!module) {
-      module = allModules.find(
-        (m) => m.name === task.subject || task.subject.includes(m.name)
+      // Create weekly plan
+      const weekId = genId("week");
+      const focusAreas = [...new Set(plan.tasks.map((t) => t.subject))].sort();
+      db.prepare(
+        `INSERT INTO weekly_plans (id, goal_id, week_start, week_end, focus_areas_json, target_correct_rate, summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        weekId,
+        goal.id,
+        plan.week_start,
+        weekEndStr,
+        JSON.stringify(focusAreas),
+        0.72,
+        "由 Akari 对话教练生成的本周计划。",
       );
-    }
-    if (!module && allModules.length > 0) {
-      module = allModules[0];
-    }
-    if (!module) {
-      return {
-        content: "无法找到对应模块，计划生成失败。",
-        ok: false,
-      };
-    }
 
-    const taskId = genId("task");
-    const questionCount =
-      task.type === "practice" || task.type === "mock_exam" ? 25 : 0;
+      // Create tasks
+      for (let index = 0; index < plan.tasks.length; index++) {
+        const task = plan.tasks[index];
 
-    db.prepare(
-      `INSERT INTO daily_tasks
-         (id, weekly_plan_id, module_id, date, title, type, subject,
-          question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      taskId,
-      weekId,
-      module.id,
-      task.date,
-      task.title,
-      task.type,
-      task.subject,
-      questionCount,
-      task.estimated_minutes,
-      0,
-      task.time_slot,
-      "pending",
-      index,
-    );
+        // Module resolution: try module_id first, then name match, then first module
+        let module: ModuleRow | undefined;
+        if (task.module_id) {
+          module = db.prepare("SELECT * FROM modules WHERE id = ?").get(
+            task.module_id,
+          ) as ModuleRow | undefined;
+        }
+        if (!module) {
+          module = allModules.find(
+            (m) => m.name === task.subject || task.subject.includes(m.name),
+          );
+        }
+        if (!module && allModules.length > 0) {
+          module = allModules[0];
+        }
+        if (!module) {
+          throw new Error("无法找到对应模块，计划生成失败。");
+        }
+
+        const taskId = genId("task");
+        const questionCount =
+          task.type === "practice" || task.type === "mock_exam" ? 25 : 0;
+
+        db.prepare(
+          `INSERT INTO daily_tasks
+             (id, weekly_plan_id, module_id, date, title, type, subject,
+              question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          taskId,
+          weekId,
+          module.id,
+          task.date,
+          task.title,
+          task.type,
+          task.subject,
+          questionCount,
+          task.estimated_minutes,
+          0,
+          task.time_slot,
+          "pending",
+          index,
+        );
+      }
+    });
+
+    writePlan();
+
+    const card = buildPlanCard();
+    return {
+      content: `已生成 ${plan.tasks.length} 个任务。`,
+      details: { plan_card: card },
+      ok: true,
+    };
+  } catch (exc) {
+    return {
+      content: `计划生成失败: ${exc instanceof Error ? exc.message : String(exc)}`,
+      ok: false,
+    };
   }
-
-  const card = buildPlanCard();
-  return {
-    content: `已生成 ${plan.tasks.length} 个任务。`,
-    details: { plan_card: card },
-    ok: true,
-  };
 }
 
 // ── Diagnostic → Plan (mirrors Python generate_plan_from_diagnostic) ──

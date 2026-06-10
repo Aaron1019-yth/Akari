@@ -114,7 +114,7 @@ function queryProfile(goalId: string): StudentProfileRow | undefined {
 }
 
 function dailyTaskToOut(task: DailyTaskRow): DailyTaskOut {
-  return { ...task };
+  return task as DailyTaskOut;
 }
 
 // ── Public API ──

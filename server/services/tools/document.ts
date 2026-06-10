@@ -1,19 +1,19 @@
 import fs from "fs";
 import path from "path";
 import { DATA_DIR } from "../../db.js";
-import pdfParse from "pdf-parse";
-import mammoth from "mammoth";
 import type { ToolDef, ToolResult } from "../llm-types.js";
 
 // ── Tool implementation ──
 
 async function readDocument(
   filePath: string,
-  maxLength: number = 10000
+  maxLength: number = 10000,
 ): Promise<ToolResult> {
   // Resolve and verify path is within uploads directory
   const resolved = path.resolve(
-    filePath.startsWith("~") ? filePath.replace(/^~/, process.env.HOME || "/Users") : filePath
+    filePath.startsWith("~")
+      ? filePath.replace(/^~/, process.env.HOME || "/Users")
+      : filePath,
   );
   const uploadsDir = path.resolve(DATA_DIR, "uploads");
 
@@ -33,40 +33,53 @@ async function readDocument(
     };
   }
 
-  try {
-    const ext = path.extname(resolved).toLowerCase();
-    let text: string;
+  const ext = path.extname(resolved).toLowerCase();
 
+  let text: string;
+  try {
     if (ext === ".pdf") {
       const dataBuffer = fs.readFileSync(resolved);
+      const pdfParse = (await import("pdf-parse")).default;
       const pdfData = await pdfParse(dataBuffer);
-      text = pdfData.text.trim();
+      text = (pdfData.text || "").trim();
     } else if (ext === ".docx") {
+      const mammoth = (await import("mammoth")).default;
       const result = await mammoth.extractRawText({ path: resolved });
-      text = result.value.trim();
-    } else if ([".txt", ".md", ".json", ".csv", ".py", ".ts", ".js", ".html", ".css", ".yaml", ".yml", ".xml"].includes(ext)) {
-      text = fs.readFileSync(resolved, "utf-8").trim();
+      text = (result.value || "").trim();
     } else {
       return {
-        content: "仅支持 PDF、Word(.docx) 和文本文件。",
+        content: "仅支持 PDF 和 Word(.docx) 文件。",
         ok: false,
       };
     }
-
-    const truncated = text.length > maxLength;
-    const content = text.slice(0, maxLength) + (truncated ? "\n\n[内容已截断]" : "");
-
-    return {
-      content,
-      details: { file_path: resolved, truncated },
-      ok: true,
-    };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Match Python's ImportError handling
+    if (
+      msg.includes("Cannot find module") ||
+      msg.includes("Cannot resolve") ||
+      msg.includes("ERR_MODULE_NOT_FOUND")
+    ) {
+      return {
+        content: "读取该格式需要安装额外依赖。",
+        ok: false,
+      };
+    }
     return {
-      content: `读取文件失败: ${err instanceof Error ? err.message : String(err)}`,
+      content: `读取文件失败: ${msg}`,
       ok: false,
     };
   }
+
+  const truncated = text.length > maxLength;
+  const content =
+    text.slice(0, maxLength) + (truncated ? "\n\n[内容已截断]" : "");
+
+  return {
+    content,
+    details: { file_path: resolved, truncated },
+    ok: true,
+  };
 }
 
 // ── Factory ──

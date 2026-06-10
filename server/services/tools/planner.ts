@@ -9,7 +9,6 @@ import {
 import type { ToolDef, ToolResult } from "../llm-types.js";
 import type {
   DailyTaskRow,
-  GoalRow,
   ModuleRow,
   TaskCreateRequest,
   TaskPatchRequest,
