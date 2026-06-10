@@ -9,7 +9,7 @@ import practiceRouter from "./api/practice.js";
 import profileRouter from "./api/profile.js";
 import settingsRouter from "./api/settings.js";
 import sessionsRouter from "./api/sessions.js";
-import filesRouter from "./api/files.js";
+import workspaceRouter from "./api/workspace.js";
 
 const app = express();
 
@@ -38,7 +38,7 @@ app.use("/api", practiceRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/sessions", sessionsRouter);
-app.use("/api/files", filesRouter);
+app.use("/api/workspace", workspaceRouter);
 
 // HTTP server (shared by Express + WebSocket)
 const server = createServer(app);

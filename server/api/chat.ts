@@ -6,11 +6,35 @@ import type { Message } from "../services/llm-types.js";
 import { AgentLoop } from "../services/agent-loop.js";
 import { IntentClassifier, Intent, clearSessionState } from "../services/intent.js";
 import { appendMessage } from "../services/chat-service.js";
-import { listFiles as listFilesFromChat } from "../services/files-service.js";
+import { listTree, ensureWorkspace } from "../services/workspace-service.js";
 import { buildPlanCard } from "../services/planner-service.js";
 import { generatePlanFromDiagnostic } from "../services/tools/generate-plan.js";
 
 const router = Router();
+
+// ── Helpers ──
+
+function getFlatFileList() {
+  ensureWorkspace();
+  const tree = listTree();
+  const flat: Array<{ file_id: string; filename: string; file_path: string; size: number; uploaded_at: string }> = [];
+  function walk(nodes: typeof tree) {
+    for (const node of nodes) {
+      if (node.type === "file") {
+        flat.push({
+          file_id: node.path,
+          filename: node.name,
+          file_path: node.path,
+          size: node.size,
+          uploaded_at: node.modified_at,
+        });
+      }
+      if (node.children) walk(node.children);
+    }
+  }
+  walk(tree);
+  return flat;
+}
 
 // ── Legacy non-streaming POST ──
 
@@ -97,7 +121,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
             );
             appendMessage(sessionId, "assistant", reply);
             send(ws, { type: "text_delta", delta: reply });
-            send(ws, { type: "file_list", files: listFilesFromChat() });
+            send(ws, { type: "file_list", files: getFlatFileList() });
             send(ws, { type: "turn_end", usage: {} });
             return;
           }
@@ -114,7 +138,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
         for await (const event of events) {
           if (ac.signal.aborted) break;
           if (event.type === "turn_end") {
-            send(ws, { type: "file_list", files: listFilesFromChat() });
+            send(ws, { type: "file_list", files: getFlatFileList() });
           }
           send(ws, event);
         }
