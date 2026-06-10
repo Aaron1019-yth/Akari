@@ -1,6 +1,5 @@
 import fs from "fs";
-import path from "path";
-import { DATA_DIR } from "../db.js";
+import { getWorkspacePath, listTree } from "./workspace-service.js";
 import { buildSystemPrompt } from "./agent-context.js";
 import {
   appendMessage,
@@ -74,27 +73,28 @@ async function generateSummaryInBackground(sessionId: string): Promise<void> {
 // ── File context builder ──
 
 function buildFileContext(): string {
-  const indexPath = path.join(DATA_DIR, "uploads", "index.json");
-  let files: Record<string, unknown>[] = [];
-  try {
-    if (fs.existsSync(indexPath)) {
-      const raw = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-      if (Array.isArray(raw)) files = raw;
-    }
-  } catch {
-    // ignore
-  }
-  files = files.slice(0, 8);
-  if (files.length === 0) return "";
+  const wp = getWorkspacePath();
+  const tree = listTree("");
+  if (tree.length === 0) return "";
 
   const lines = [
-    "# 当前会话文件",
-    "用户上传或会话生成的文件如下。需要读取内容时调用 read_document，并使用 file_path。",
+    "# 当前工作区文件",
+    `工作区路径: ${wp}`,
   ];
-  for (const item of files) {
-    lines.push(
-      `- ${item.filename || ""} | file_id=${item.file_id || ""} | file_path=${item.file_path || ""}`,
-    );
+  for (const node of tree.slice(0, 12)) {
+    if (node.type === "directory") {
+      lines.push(`- ${node.name}/ (目录)`);
+      if (node.children) {
+        for (const child of node.children.slice(0, 8)) {
+          lines.push(`  - ${child.name}`);
+        }
+      }
+    } else {
+      lines.push(`- ${node.name}`);
+    }
+  }
+  if (tree.length > 12) {
+    lines.push(`... 还有 ${tree.length - 12} 个项目`);
   }
   return lines.join("\n");
 }
