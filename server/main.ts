@@ -3,6 +3,13 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { initDatabase } from "./db.js";
+import plannerRouter from "./api/planner.js";
+import chatRouter, { setupWebSocket } from "./api/chat.js";
+import practiceRouter from "./api/practice.js";
+import profileRouter from "./api/profile.js";
+import settingsRouter from "./api/settings.js";
+import sessionsRouter from "./api/sessions.js";
+import filesRouter from "./api/files.js";
 
 const app = express();
 
@@ -24,15 +31,22 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", name: "Akari" });
 });
 
+// Routers
+app.use("/api/planner", plannerRouter);
+app.use("/api/chat", chatRouter);
+app.use("/api", practiceRouter);
+app.use("/api/profile", profileRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api/sessions", sessionsRouter);
+app.use("/api/files", filesRouter);
+
 // HTTP server (shared by Express + WebSocket)
 const server = createServer(app);
 
 // WebSocket server at /api/chat/ws
 const wss = new WebSocketServer({ server, path: "/api/chat/ws" });
 
-wss.on("connection", (_ws) => {
-  // WebSocket handling will be implemented in Task 8 (API routes)
-});
+setupWebSocket(wss);
 
 // Initialize database on startup
 initDatabase();
