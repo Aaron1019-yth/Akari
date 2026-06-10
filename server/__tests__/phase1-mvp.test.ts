@@ -79,7 +79,7 @@ describe("File upload", () => {
   it("upload and list", async () => {
     // Matches: test_file_upload_and_list
     const resp = await request(app)
-      .post("/api/files/upload")
+      .post("/api/workspace/upload")
       .attach(
         "file",
         Buffer.from("fake docx bytes"),
@@ -91,13 +91,13 @@ describe("File upload", () => {
       );
     expect(resp.status).toBe(200);
     const uploaded = resp.body;
-    expect(uploaded.filename).toBe("notes.docx");
+    expect(uploaded.file.name).toBe("notes.docx");
 
-    const listed = await request(app).get("/api/files");
+    const listed = await request(app).get("/api/workspace/tree");
     expect(listed.status).toBe(200);
     expect(
-      listed.body.files.some(
-        (item: { file_id: string }) => item.file_id === uploaded.file_id
+      listed.body.tree.some(
+        (item: { name: string }) => item.name === uploaded.file.name
       )
     ).toBe(true);
   });

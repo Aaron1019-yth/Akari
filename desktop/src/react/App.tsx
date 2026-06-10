@@ -7,7 +7,7 @@ import { Workbench } from "./components/Workbench";
 import { SettingsModal } from "./components/SettingsModal";
 
 import { api, createChatStream } from "./services/api";
-import type { ChatMessage, ConversationFile, DailyTask, GoalTree, TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
+import type { ChatMessage, DailyTask, FileNode, GoalTree, TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
 import { addDays, formatAppDate, nextExamDate, shortDate, taskTypeOptions, toolLabel, weekDayLabels } from "./utils";
 
 export function App() {
@@ -50,7 +50,14 @@ export function App() {
   const [settingsSerperKeyMeta, setSettingsSerperKeyMeta] = useState({ isSet: false, masked: "" });
   const [settingsBraveKeyMeta, setSettingsBraveKeyMeta] = useState({ isSet: false, masked: "" });
   const [activeWorkbenchTab, setActiveWorkbenchTab] = useState<"plan" | "files" | "workspace">("plan");
-  const [files, setFiles] = useState<ConversationFile[]>([]);
+  const [fileTree, setFileTree] = useState<FileNode[]>([]);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewMime, setPreviewMime] = useState("text/plain");
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ session_id: string; message_count: number; last_message_at: string; preview: string }>>([]);
@@ -65,7 +72,7 @@ export function App() {
       .then(setGoal)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-    api.getFiles().then((payload) => setFiles(payload.files)).catch(() => undefined);
+    api.getWorkspaceTree().then((data) => setFileTree(data.tree)).catch(() => {});
     api.getSettings().then((s) => {
       setAppUiTheme(s.ui_theme);
       setSettingsUiTheme(s.ui_theme);
@@ -285,18 +292,35 @@ export function App() {
     uploadAbortRef.current = controller;
     setUploadingFile(file.name);
     try {
-      const stored = await api.uploadFile(file, controller.signal);
-      const payload = await api.getFiles();
-      setFiles(payload.files);
-      setActiveWorkbenchTab("files");
+      const data = await api.uploadWorkspaceFile(file, controller.signal);
+      setFileTree(data.tree);
+      setActiveWorkbenchTab("workspace");
       setMessages((prev) => [
         ...prev,
         {
           role: "user",
-          content: `用户上传了 ${stored.filename}`,
+          content: `用户上传了 ${file.name}`,
           created_at: new Date().toISOString(),
         },
       ]);
+      // 自动预览上传的文件
+      if (data.file?.path) {
+        setSelectedPath(data.file.path);
+        setPreviewLoading(true);
+        try {
+          const result = await api.getWorkspaceFile(data.file.path);
+          setPreviewContent(result.content);
+          setPreviewMime(result.mime);
+          if (result.content !== null) {
+            setReadingFile(true);
+            setLeftCollapsed(true);
+          }
+        } catch {
+          setPreviewContent(null);
+        } finally {
+          setPreviewLoading(false);
+        }
+      }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setUploadError(err instanceof Error ? err.message : "上传失败");
@@ -352,7 +376,7 @@ export function App() {
         void refreshGoal();
       },
       onFileList: (nextFiles) => {
-        setFiles(nextFiles);
+        setFileTree(nextFiles);
       },
       onTurnEnd: () => {
         setSendingChat(false);
@@ -428,6 +452,7 @@ export function App() {
         serper_api_key: settingsSerperKey,
         brave_search_api_key: settingsBraveKey,
         ui_theme: settingsUiTheme,
+        workspace_path: "",
       });
       setSettingsApiKey("");
       setSettingsTavilyKey("");
@@ -465,21 +490,72 @@ export function App() {
     setMessages([]);
   }
 
-  async function handleDeleteFile(fileId: string) {
+  async function handleFileSelect(path: string) {
+    setSelectedPath(path);
+    setPreviewLoading(true);
     try {
-      await api.deleteFile(fileId);
-      const payload = await api.getFiles();
-      setFiles(payload.files);
+      const result = await api.getWorkspaceFile(path);
+      setPreviewContent(result.content);
+      setPreviewMime(result.mime);
+      if (result.content !== null) {
+        setReadingFile(true);
+        setLeftCollapsed(true);
+      }
+    } catch {
+      setPreviewContent(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function handleFileDelete(filePath: string) {
+    try {
+      const data = await api.deleteWorkspaceFile(filePath);
+      setFileTree(data.tree);
+      if (selectedPath === filePath) {
+        setSelectedPath(null);
+        setPreviewContent(null);
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "删除失败");
     }
   }
 
+  async function handleFileRename(oldPath: string) {
+    const newName = window.prompt("新文件名:", oldPath);
+    if (!newName || newName === oldPath) return;
+    try {
+      const dir = oldPath.includes("/") ? oldPath.slice(0, oldPath.lastIndexOf("/") + 1) : "";
+      const newPath = dir + newName;
+      const data = await api.renameWorkspaceFile(oldPath, newPath);
+      setFileTree(data.tree);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "重命名失败");
+    }
+  }
+
+  const filesCount = useMemo(() => {
+    const countRecursive = (nodes: FileNode[]): number => {
+      let c = 0;
+      for (const n of nodes) {
+        if (n.type === "file") c++;
+        if (n.children) c += countRecursive(n.children);
+      }
+      return c;
+    };
+    return countRecursive(fileTree);
+  }, [fileTree]);
+
   return (
     <div className="app-shell">
-      <Titlebar />
+      <Titlebar
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onToggleLeft={() => setLeftCollapsed((v) => !v)}
+        onToggleRight={() => setRightCollapsed((v) => !v)}
+      />
 
-      <div className="app-body" style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(420px, 1fr) 6px ${rightWidth}px` }}>
+      <div className="app-body" style={{ gridTemplateColumns: `${leftCollapsed ? 0 : leftWidth}px ${leftCollapsed ? 0 : 1}px minmax(420px, 1fr) ${rightCollapsed ? 0 : 1}px ${rightCollapsed ? 0 : rightWidth}px` }}>
         <Sidebar
           sessions={sessions}
           activeSessionId={activeSessionId}
@@ -487,7 +563,9 @@ export function App() {
           onNewSession={handleNewSession}
           onOpenSettings={openSettings}
         />
-        <button className="resize-handle resize-left" aria-label="调整左侧栏宽度" onMouseDown={(event) => startResize("left", event)} />
+        {!leftCollapsed && (
+          <button className="resize-handle resize-left" aria-label="调整左侧栏宽度" onMouseDown={(event) => startResize("left", event)} />
+        )}
 
         <ChatPanel
           loading={loading}
@@ -496,7 +574,7 @@ export function App() {
           messages={messages}
           sendingChat={sendingChat}
           currentToolLabel={currentToolLabel}
-          filesCount={files.length}
+          filesCount={filesCount}
           chatInput={chatInput}
           onChatInputChange={setChatInput}
           uploadingFile={uploadingFile}
@@ -509,12 +587,28 @@ export function App() {
           onUploadFile={handleUploadFile}
           onCancelUpload={() => uploadAbortRef.current?.abort()}
         />
-        <button className="resize-handle resize-right" aria-label="调整右侧栏宽度" onMouseDown={(event) => startResize("right", event)} />
+        {!rightCollapsed && (
+          <button className="resize-handle resize-right" aria-label="调整右侧栏宽度" onMouseDown={(event) => startResize("right", event)} />
+        )}
 
         <Workbench
           activeWorkbenchTab={activeWorkbenchTab}
           onTabChange={setActiveWorkbenchTab}
-          files={files}
+          fileTree={fileTree}
+          selectedPath={selectedPath}
+          previewContent={previewContent}
+          previewMime={previewMime}
+          previewLoading={previewLoading}
+          onFileSelect={handleFileSelect}
+          onFileDelete={handleFileDelete}
+          onFileRename={handleFileRename}
+          readingFile={readingFile}
+          onExitReading={() => {
+            setReadingFile(false);
+            setLeftCollapsed(false);
+            setSelectedPath(null);
+            setPreviewContent(null);
+          }}
           goal={goal}
           daysLeft={daysLeft}
           planProgress={planProgress}
@@ -536,7 +630,6 @@ export function App() {
           onAddTask={addTask}
           onOpenDraft={openDraft}
           onOpenTimer={openTimer}
-          onDeleteFile={handleDeleteFile}
           timerTask={timerTask}
           timerMode={timerMode}
           timerMinutes={timerMinutes}

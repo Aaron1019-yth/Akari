@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -53,7 +53,8 @@ async function waitForProcessExit(proc, pid, timeoutMs) {
 }
 
 function killPid(pid, force = false) {
-  try { process.kill(pid, force ? "SIGKILL" : "SIGTERM"); } catch {}
+  // Negative PID kills the entire process group (detached spawn)
+  try { process.kill(-pid, force ? "SIGKILL" : "SIGTERM"); } catch {}
 }
 
 async function shutdownServer() {
@@ -94,14 +95,16 @@ function startBackend() {
     backendProcess = spawn(tsx, ["server/main.ts"], {
       cwd: projectRoot,
       stdio: "inherit",
+      detached: true,
     });
-    backendProcess.unref();
   });
 }
 
 // ── window ──
 
 function createWindow() {
+  const isMac = process.platform === "darwin";
+
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -109,7 +112,11 @@ function createWindow() {
     minHeight: 680,
     title: "Akari",
     backgroundColor: "#f6f4ef",
+    titleBarStyle: isMac ? "hiddenInset" : "default",
+    ...(isMac ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
+    frame: isMac ? true : false,
     webPreferences: {
+      contextIsolation: true,
       preload: path.resolve(__dirname, "../../preload/index.cjs"),
     },
   });
@@ -120,6 +127,26 @@ function createWindow() {
     win.loadFile(path.join(projectRoot, "dist", "react", "index.html"));
   }
 }
+
+// ── window controls IPC ──
+
+ipcMain.on("window-minimize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
+});
+
+ipcMain.on("window-maximize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+});
+
+ipcMain.on("window-close", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+});
 
 // ── lifecycle ──
 

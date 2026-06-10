@@ -3,7 +3,7 @@
 Last updated: 2026-06-10
 
 > **当前路线图**：`docs/superpowers/specs/2026-06-10-phase1-mvp-design.md`（Phase 1–3 完整规格）。
-> **阶段状态**：Phase 1 对话式规划教练 MVP 已完成。Phase 1.5 功能收尾已完成（2026-06-10）。后端已从 Python/FastAPI 迁移到 Node.js/TypeScript（2026-06-10）。Phase 2 未开始。验收记录见 `docs/PHASE_COMPLETION_LOG.md`。
+> **阶段状态**：Phase 1 对话式规划教练 MVP 已完成。Phase 1.5 功能收尾已完成（2026-06-10）。后端已从 Python/FastAPI 迁移到 Node.js/TypeScript（2026-06-10）。Phase 2 Workspace 文件系统已完成（2026-06-10）。Phase 3 UI 生产级打磨已完成（2026-06-11）。验收记录见 `docs/PHASE_COMPLETION_LOG.md`。
 
 ## Project State
 
@@ -17,9 +17,10 @@ Akari is a clean-room exam preparation desktop app. The current MVP has:
 - Right workbench with total plan card, daily plan, weekly plan, task completion, and pomodoro actual-time recording.
 - Center chat panel with full DeepSeek Agent via WebSocket streaming (tool-calling, abort, streaming text).
 - 6 planner tools: `get_planner_context`, `get_today_tasks`, `get_week_tasks`, `create_task`, `update_task`, `get_module_stats`.
-- General tools: `web_search`, `web_fetch`, `read_document`.
+- General tools: `web_search`, `web_fetch`, `read_document`, `write_to_file`, `list_workspace_files`.
 - Plan generation tool: `generate_plan`.
 - Agent loop: LLM → tool_calls → execute tools → feed results → repeat (max 8 rounds).
+- Workspace: real filesystem at `~/Desktop/Akari-WorkSpace/` with FileTree + FilePreview in workbench, path sandbox, PDF/DOCX parsing.
 - Phase 1 routing: IntentClassifier with session-scoped diagnostic state, deterministic diagnostic-to-plan generation, `plan_card` / `file_list` WebSocket events.
 - Settings UI: API key / Base URL / Model / Tavily / Serper / Brave configurable from sidebar, persisted to `.akari/config.json`.
 
@@ -35,6 +36,7 @@ Env vars serve as **defaults** — they can be overridden via the Settings UI at
 | `TAVILY_API_KEY` | — | no (can set via UI) |
 | `SERPER_API_KEY` | — | no (can set via UI) |
 | `BRAVE_SEARCH_API_KEY` | — | no (can set via UI) |
+| `AKARI_WORKSPACE_PATH` | `~/Desktop/Akari-WorkSpace` | no |
 
 ## Run Commands
 
@@ -74,14 +76,16 @@ npm run test:api
 - `server/api/planner.ts`: planner/task endpoints.
 - `server/api/chat.ts`: WebSocket `/api/chat/ws` + legacy `POST /api/chat`.
 - `server/services/planner-service.ts`: rule-based plan generation, task create/update/adapt.
+- `server/api/workspace.ts`: 7 workspace REST endpoints (tree, file read/write, upload, delete, rename, info).
 - `server/services/chat-service.ts`: local JSONL chat persistence.
+- `server/services/workspace-service.ts`: filesystem workspace with path sandbox, FileNode tree, PDF/DOCX parsing.
 - **Agent layer:**
   - `server/services/llm-types.ts`: `Message`, `ToolCall`, `TokenUsage` interfaces.
   - `server/services/llm-client.ts`: DeepSeek HTTP/SSE client (`chat()` + `chatStream()`).
   - `server/services/tool-registry.ts`: `ToolRegistry` — register, schema export, execute with error handling.
   - `server/services/tools/planner.ts`: 6 planner tools (context, tasks, create/update, stats).
   - `server/services/tools/web.ts`: `web_search` + `web_fetch` tools.
-  - `server/services/tools/document.ts`: `read_document` tool.
+  - `server/services/tools/document.ts`: `read_document` + `write_to_file` + `list_workspace_files` tools.
   - `server/services/tools/generate-plan.ts`: `generate_plan` tool + diagnostic→plan pipeline.
   - `server/services/agent-context.ts`: `buildSystemPrompt()` — static identity prefix + current time.
   - `server/services/agent-loop.ts`: `AgentLoop` — streaming orchestration with abort support, max 8 rounds.
@@ -89,8 +93,10 @@ npm run test:api
   - `server/services/settings-service.ts`: settings persistence to `.akari/config.json`, in-memory cache, key masking.
 - `desktop/src/react/App.tsx`: main UI, chat, right workbench, resize handles, streaming messages, abort button.
 - `desktop/src/react/services/api.ts`: frontend API client + `createChatStream()` WebSocket client.
-- `shared/exam-schema.ts`: TypeScript domain contract (shared types).
-- `server/__tests__/`: Vitest test suite.
+- `desktop/src/react/components/FileTree.tsx`: recursive file tree with expand/collapse, context menu.
+- `desktop/src/react/components/FilePreview.tsx`: text/Markdown file preview.
+- `shared/exam-schema.ts`: TypeScript domain contract (shared types, including `FileNode`).
+- `server/__tests__/`: Vitest test suite (20 tests).
 
 ## Verified Flows
 
@@ -107,28 +113,28 @@ npm run test:api
 - Configure search provider keys via Settings UI.
 - Settings persist to `.akari/config.json` and survive restarts; env vars serve as defaults.
 - Phase 1 diagnostic flow: collect fields, generate plan, push plan_card, clear session_state.
-- Upload PDF/DOCX files and list them in the right workbench.
+- Upload PDF/DOCX files to workspace and browse in FileTree.
+- File preview (text/markdown) in workspace tab.
+- File delete and rename via context menu in workspace.
+- Agent can read/write/list workspace files via tools.
 - Conversation history persists to `.akari/memory/sessions/*.jsonl` and is loaded into Agent turns.
 - Build frontend.
-- Run API smoke tests.
+- Run API smoke tests (20 passing).
 
-## Phase 1.5 UI / UX Follow-Ups
+## Phase 3 — UI / UX 生产级打磨（2026-06-11）
 
-- First UI polish pass is in place: left session/status rail, chat status bar, auto-scroll message flow, plan summary stats, and a cooler workbench palette.
-- UI needs production-grade polish inspired by `agent_demo-main`: denser planner surface, clearer status indicators, calmer tool activity, better workbench tabs.
-- Center panel should remain chat-first, with better message rhythm and scroll behavior.
-- Right workbench should present current plan/files/workspace as first-class tabs.
-- Left and right borders are draggable; current widths are not persisted yet.
-- Settings modal is functional but growing; it may need sections/tabs.
+- 左侧边栏重构：移除 traffic lights，增加「助手活动」「任务计划」占位菜单项，增加 collapse/expand tab。
+- 中央聊天面板：移除顶部 status bar，空状态改为「Akari 随时都在」SVG 头像，composer hint 上移。
+- 右侧工作台（OH-WorkSpace）：「对话文件」+「工作台」合并为单一 Workspace tab，含「我的规划」「对话文件」「工作台」三个子 tab。
+- 文件阅读模式：打开文件时自动折叠左侧边栏，全宽预览；上传文件后自动预览。
+- 全局设计升级（redesign-skill 审计）：Geist Variable 字体、off-white 配色、阴影色调统一、hover/active/focus 状态、噪点纹理、border-radius 层级、语义化 HTML、scroll-behavior: smooth。
 
 ## Known Technical Follow-Ups
 
-- No database migrations yet; tables are created with `Base.metadata.create_all`.
+- No database migrations yet; tables are created with `CREATE TABLE IF NOT EXISTS`.
 - Electron packaging is not done.
 - No `steer` / `resume_stream` implementation yet in WebSocket handler (infrastructure ready, handlers are stubs).
-- File rename backend exists but no UI wired yet.
 - Settings form is long; could use sections/tabs (deferred to Phase 4).
-- File preview not implemented (deferred to Phase 4).
 - Mood / thinking / card event parsing not implemented (deferred to Phase 4).
 
 ## Electron Note
@@ -143,7 +149,7 @@ The script matches the cached zip by the installed Electron version to avoid ext
 
 ## Reference: Hanako (agent_demo-main) Architecture
 
-Hanako is the predecessor project. This section documents its agent-layer architecture as a reference for Akari's design. Hanako is TypeScript/Node.js + Electron + Pi SDK; Akari is Python/FastAPI + Vite/React + Electron. Same architectural principles, different runtime.
+Hanako is the predecessor project. This section documents its agent-layer architecture as a reference for Akari's design. Hanako is TypeScript/Node.js + Electron + Pi SDK; Akari is Node.js/TypeScript + Express + Vite/React + Electron. Same architectural principles, different runtime.
 
 ### Directory Map
 

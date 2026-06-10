@@ -1,4 +1,4 @@
-import { Link2, MessageSquareText, Plus, Search, Settings } from "lucide-react";
+import { Activity, CalendarCheck, Link2, MessageSquareText, Plus, Search, Settings } from "lucide-react";
 
 interface SidebarProps {
   sessions: Array<{ session_id: string; message_count: number; last_message_at: string; preview: string }>;
@@ -29,8 +29,21 @@ export function Sidebar({ sessions, activeSessionId, onSelectSession, onNewSessi
         <i />
       </button>
 
+      <div className="sidebar-menu">
+        <div className="sidebar-menu-item">
+          <Activity size={15} />
+          <span>助手活动</span>
+        </div>
+        <div className="sidebar-menu-item">
+          <CalendarCheck size={15} />
+          <span>任务计划</span>
+        </div>
+      </div>
+
+      <div className="sidebar-divider" />
+
       {sessions.length === 0 ? (
-        <div className="sidebar-empty">还没有对话哦</div>
+        <div className="sidebar-empty">还没有对话哦 🌸</div>
       ) : (
         sessions.map((s) => (
           <button
@@ -53,11 +66,6 @@ export function Sidebar({ sessions, activeSessionId, onSelectSession, onNewSessi
         <Search size={17} />
         <input placeholder="搜索聊天记录" />
       </label>
-
-      <button className="session settings-button" onClick={onOpenSettings}>
-        <Settings size={18} />
-        设置
-      </button>
     </aside>
   );
 }

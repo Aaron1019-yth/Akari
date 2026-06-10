@@ -74,7 +74,48 @@
 ### 暂缓到 Phase 4（UI 打磨）
 
 - Settings 分区化
-- 文件预览
 - mood / thinking / card 事件解析与展示
 - 边栏宽度持久化
 - Workbench 视觉密度优化
+
+## Phase 2 — Workspace 文件系统
+
+- 启动日期：2026-06-10
+- 确认日期：2026-06-10
+- 状态：已完成
+
+### 完成范围
+
+- 后端 workspace 服务层：真实文件系统 `~/Desktop/Akari-WorkSpace/`，路径沙盒（防 `..` 穿越），隐藏文件/目录过滤，PDF/DOCX 解析，500KB 文本限制。
+- Workspace API：7 个 REST 端点（`GET /tree`、`GET /file`、`POST /file`、`POST /upload`、`DELETE /file`、`PATCH /file`、`GET /info`）。
+- Settings：`workspace_path` 配置持久化到 `.akari/config.json`，支持 `AKARI_WORKSPACE_PATH` 环境变量。
+- Agent 工具更新：`read_document` 改为从 workspace 路径读；新增 `write_to_file` + `list_workspace_files`。
+- 前端 FileTree 组件：递归展开/折叠，右键菜单删除/重命名。
+- 前端 FilePreview 组件：文本/Markdown 渲染。
+- Workbench 整合：「对话文件」+「工作台」合并为单一 Workspace tab，左侧文件树 + 右侧预览。
+- 删除旧 `files-service.ts`、`api/files.ts`、`ConversationFile` 类型、`.akari/uploads/` 目录。
+
+### 验证
+
+- `npx tsc --noEmit`：通过
+- `npm run build`：通过
+- `npm run test:api`：20 passed（新增 10 个 workspace 测试）
+
+## Phase 3 — UI 生产级打磨
+
+- 启动日期：2026-06-11
+- 确认日期：2026-06-11
+- 状态：已完成
+
+### 完成范围
+
+- 左侧边栏重构：移除 traffic lights，新增「助手活动」「任务计划」占位菜单，collapse/expand tab。
+- 中央聊天面板：空状态 SVG 头像，composer hint 上移，移除顶部 status bar。
+- 右侧工作台：「对话文件」+「工作台」合并为单一 Workspace tab，含「我的规划」「对话文件」「工作台」子 tab。
+- 文件阅读模式：打开文件自动折叠左侧边栏，全宽预览；上传文件自动预览。
+- 全局设计升级：Geist Variable 字体、off-white 配色 `#f2f0ec`、阴影色调统一、hover/active/focus 状态、噪点纹理 overlay、border-radius 层级、语义化 HTML。
+
+### 验证
+
+- `npm run build`：通过
+- 实测：侧边栏折叠/展开、文件阅读模式、上传自动预览、主题切换均正常。

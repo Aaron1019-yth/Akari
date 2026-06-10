@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "npm run build && electron .",
     "dev": "vite --host 127.0.0.1",
-    "start": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "dev:api": "tsx --watch server/main.ts",
     "dev:desktop": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "tsc && vite build",
@@ -16,6 +16,7 @@
   },
   "main": "desktop/src/main/bootstrap.cjs",
   "dependencies": {
+    "@fontsource-variable/geist": "^5.2.9",
     "@vitejs/plugin-react": "^5.0.0",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",

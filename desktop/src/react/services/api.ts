@@ -1,7 +1,7 @@
 import type {
   ChatRequest,
   ChatResponse,
-  ConversationFile,
+  FileNode,
   GeneratePlanRequest,
   GoalTree,
   PlanCardPayload,
@@ -11,8 +11,14 @@ import type {
   UiTheme
 } from "../../../../shared/exam-schema";
 
+function apiBase(): string {
+  // In production Electron (loadFile), page origin is file:// — need absolute backend URL.
+  // In dev, page is served from http://127.0.0.1:5173 and Vite proxies /api to backend.
+  return window.location.protocol === "file:" ? "http://127.0.0.1:8742" : "";
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiBase() + path, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -39,6 +45,7 @@ type LlmSettings = {
   brave_search_api_key_masked: string;
   brave_search_api_key_is_set: boolean;
   ui_theme: UiTheme;
+  workspace_path: string;
 };
 
 type LlmSettingsUpdate = {
@@ -49,6 +56,7 @@ type LlmSettingsUpdate = {
   serper_api_key: string;
   brave_search_api_key: string;
   ui_theme: UiTheme;
+  workspace_path: string;
 };
 
 type WsEvent = {
@@ -60,7 +68,7 @@ type WsEvent = {
   summary?: string;
   message?: string;
   card?: PlanCardPayload;
-  files?: ConversationFile[];
+  files?: FileNode[];
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 };
 
@@ -69,14 +77,15 @@ type ChatStreamCallbacks = {
   onToolStart?: (name: string, args: Record<string, unknown>) => void;
   onToolEnd?: (name: string, ok: boolean, summary: string) => void;
   onPlanCard?: (card: PlanCardPayload) => void;
-  onFileList?: (files: ConversationFile[]) => void;
+  onFileList?: (files: FileNode[]) => void;
   onTurnEnd?: () => void;
   onError?: (message: string) => void;
 };
 
 export function createChatStream(callbacks: ChatStreamCallbacks) {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const url = `${protocol}://${window.location.host}/api/chat/ws`;
+  const host = window.location.protocol === "file:" ? "127.0.0.1:8742" : window.location.host;
+  const url = `${protocol}://${host}/api/chat/ws`;
 
   let ws: WebSocket;
   let finished = false;
@@ -164,21 +173,6 @@ export function createChatStream(callbacks: ChatStreamCallbacks) {
   };
 }
 
-async function uploadFile(file: File, signal?: AbortSignal): Promise<ConversationFile> {
-  const form = new FormData();
-  form.append("file", file);
-  const response = await fetch("/api/files/upload", {
-    method: "POST",
-    body: form,
-    signal,
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Upload failed: ${response.status}`);
-  }
-  return response.json() as Promise<ConversationFile>;
-}
-
 export const api = {
   getGoal: () => request<GoalTree | null>("/api/planner/goal"),
   generatePlan: (payload: GeneratePlanRequest) =>
@@ -201,15 +195,41 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  uploadFile,
-  getFiles: () => request<{ files: ConversationFile[] }>("/api/files"),
-  deleteFile: (fileId: string) =>
-    request<{ ok: boolean }>(`/api/files/${fileId}`, { method: "DELETE" }),
-  renameFile: (fileId: string, filename: string) =>
-    request<ConversationFile>(`/api/files/${fileId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ filename }),
+  getWorkspaceTree: (dir = "") =>
+    request<{ tree: FileNode[]; workspace_path: string }>(`/api/workspace/tree?dir=${encodeURIComponent(dir)}`),
+  getWorkspaceFile: (filePath: string) =>
+    request<{ content: string; mime: string; truncated: boolean }>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`),
+  createWorkspaceFile: (filePath: string, content: string) =>
+    request<{ ok: boolean; tree: FileNode[] }>("/api/workspace/file", {
+      method: "POST",
+      body: JSON.stringify({ path: filePath, content }),
     }),
+  uploadWorkspaceFile: (file: File, signal?: AbortSignal) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(apiBase() + "/api/workspace/upload", {
+      method: "POST",
+      body: form,
+      signal,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Upload failed: ${res.status}`);
+      }
+      return res.json() as Promise<{ file: FileNode; tree: FileNode[]; workspace_path: string }>;
+    });
+  },
+  deleteWorkspaceFile: (filePath: string) =>
+    request<{ ok: boolean; tree: FileNode[] }>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`, {
+      method: "DELETE",
+    }),
+  renameWorkspaceFile: (oldPath: string, newPath: string) =>
+    request<{ ok: boolean; tree: FileNode[] }>("/api/workspace/file", {
+      method: "PATCH",
+      body: JSON.stringify({ old_path: oldPath, new_path: newPath }),
+    }),
+  getWorkspaceInfo: () =>
+    request<{ workspace_path: string }>("/api/workspace/info"),
   adaptPlan: () => request<GoalTree>("/api/planner/adapt", { method: "POST" }),
   getSessions: () => request<{ sessions: Array<{ session_id: string; message_count: number; last_message_at: string; preview: string }> }>("/api/sessions"),
   getSessionMessages: (sessionId: string) => request<{ session_id: string; messages: Array<{ role: string; content: string; created_at: string }> }>(`/api/sessions/${sessionId}`),

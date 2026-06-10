@@ -1,11 +1,22 @@
 import { Check, ChevronUp, Clock3, FileText, Pencil, Plus, Sparkles, X } from "lucide-react";
-import type { ConversationFile, DailyTask, GoalTree, TaskStatus, TaskType, TimeSlot } from "../../../../shared/exam-schema";
+import type { DailyTask, FileNode, GoalTree, TaskStatus, TaskType, TimeSlot } from "../../../../shared/exam-schema";
 import { formatAppDate, shortDate, slotLabel, taskTypeOptions } from "../utils";
+import { FileTree } from "./FileTree";
+import { FilePreview } from "./FilePreview";
 
 interface WorkbenchProps {
   activeWorkbenchTab: "plan" | "files" | "workspace";
   onTabChange: (tab: "plan" | "files" | "workspace") => void;
-  files: ConversationFile[];
+  fileTree: FileNode[];
+  selectedPath: string | null;
+  previewContent: string | null;
+  previewMime: string;
+  previewLoading: boolean;
+  onFileSelect: (path: string) => void;
+  onFileDelete: (path: string) => void;
+  onFileRename: (path: string) => void;
+  readingFile: boolean;
+  onExitReading: () => void;
   goal: GoalTree | null;
   daysLeft: number;
   planProgress: number;
@@ -27,7 +38,6 @@ interface WorkbenchProps {
   onAddTask: (slot: TimeSlot) => void;
   onOpenDraft: (slot: TimeSlot) => void;
   onOpenTimer: (task: DailyTask) => void;
-  onDeleteFile: (fileId: string) => void;
   timerTask: DailyTask | null;
   timerMode: "countdown" | "countup";
   timerMinutes: number;
@@ -44,7 +54,16 @@ interface WorkbenchProps {
 export function Workbench({
   activeWorkbenchTab,
   onTabChange,
-  files,
+  fileTree,
+  selectedPath,
+  previewContent,
+  previewMime,
+  previewLoading,
+  onFileSelect,
+  onFileDelete,
+  onFileRename,
+  readingFile,
+  onExitReading,
   goal,
   daysLeft,
   planProgress,
@@ -66,7 +85,6 @@ export function Workbench({
   onAddTask,
   onOpenDraft,
   onOpenTimer,
-  onDeleteFile,
   timerTask,
   timerMode,
   timerMinutes,
@@ -82,10 +100,10 @@ export function Workbench({
   return (
     <aside className="workbench">
       <div className="workbench-title">
-        <strong>Akari Workbench</strong>
-        <button>
-          <Sparkles size={14} />
-          Phase 1.5
+        <strong>OH-WorkSpace</strong>
+        <button className="workbench-skill-btn">
+          <Sparkles size={13} />
+          项目技能
         </button>
       </div>
       <div className="panel-heading">
@@ -93,34 +111,39 @@ export function Workbench({
         <button className={activeWorkbenchTab === "files" ? "active" : ""} onClick={() => onTabChange("files")}>对话文件</button>
         <button className={activeWorkbenchTab === "workspace" ? "active" : ""} onClick={() => onTabChange("workspace")}>工作台</button>
       </div>
-      {activeWorkbenchTab === "files" ? (
-        <section className="file-panel">
-          {files.length === 0 ? (
-            <p className="workbench-empty">暂无文件，点击聊天框 + 上传</p>
+      {activeWorkbenchTab === "files" || activeWorkbenchTab === "workspace" ? (
+        <section className="workspace-panel">
+          {readingFile && selectedPath ? (
+            <div className="workspace-reading">
+              <FilePreview
+                path={selectedPath}
+                content={previewContent}
+                mime={previewMime}
+                loading={previewLoading}
+                onClose={onExitReading}
+              />
+            </div>
           ) : (
-            <div className="file-list">
-              {files.map((file) => (
-                <div className="file-item" key={file.file_id}>
-                  <FileText size={17} />
-                  <span>{file.filename}</span>
-                  <button
-                    className="icon-muted"
-                    aria-label="删除文件"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onDeleteFile(file.file_id);
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+            <div className="workspace-split">
+              <div className="workspace-tree">
+                <FileTree
+                  tree={fileTree}
+                  selectedPath={selectedPath}
+                  onSelect={onFileSelect}
+                  onDelete={onFileDelete}
+                  onRename={onFileRename}
+                />
+              </div>
+              <div className="workspace-preview">
+                <FilePreview
+                  path={selectedPath}
+                  content={previewContent}
+                  mime={previewMime}
+                  loading={previewLoading}
+                />
+              </div>
             </div>
           )}
-        </section>
-      ) : activeWorkbenchTab === "workspace" ? (
-        <section className="file-panel">
-          <p className="workbench-empty">Phase 2 将支持笔记</p>
         </section>
       ) : goal ? (
         <>

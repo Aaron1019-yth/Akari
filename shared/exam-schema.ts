@@ -114,12 +114,13 @@ export interface ChatResponse {
   message: ChatMessage;
 }
 
-export interface ConversationFile {
-  file_id: string;
-  filename: string;
-  file_path: string;
+export interface FileNode {
+  name: string;
+  type: "file" | "directory";
+  path: string;
   size: number;
-  uploaded_at: string;
+  modified_at: string;
+  children: FileNode[] | null;
 }
 
 export interface PlanCardPayload {

@@ -1,4 +1,4 @@
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { ExternalLink, Loader2, Plus, Sparkles } from "lucide-react";
 import type { ChatMessage, GoalTree } from "../../../../shared/exam-schema";
 
 interface ChatPanelProps {
@@ -56,17 +56,6 @@ export function ChatPanel({
         if (file) void onUploadFile(file);
       }}
     >
-      <header className="chat-statusbar">
-        <div>
-          <strong>对话式规划教练</strong>
-          <span>{sendingChat ? (currentToolLabel ? `正在${currentToolLabel}` : "正在回复") : "就绪"}</span>
-        </div>
-        <div className="status-pills">
-          <span>{messages.length} 条消息</span>
-          <span>{filesCount} 个文件</span>
-        </div>
-      </header>
-
       <section className="conversation" ref={conversationRef}>
         {loading && <p className="muted">正在连接 Akari 后端...</p>}
         {error && <p className="error">{error}</p>}
@@ -81,10 +70,27 @@ export function ChatPanel({
         )}
         {goal && messages.length === 0 && (
           <div className="agent-empty">
-            <div className="agent-avatar">A</div>
-            <h1>今天想聊点什么？</h1>
-            <p>工作台：OH-WorkSpace</p>
-            <span>记忆</span>
+            <div className="agent-avatar-new">
+              <svg viewBox="0 0 100 100" width="72" height="72">
+                <circle cx="50" cy="50" r="48" fill="#f5f0e8" stroke="#c8b8a0" strokeWidth="1" />
+                <path d="M35 35 C35 25, 45 20, 55 22 C60 23, 65 28, 65 35 C65 38, 64 40, 62 42 C68 45, 72 52, 72 60 C72 75, 60 85, 45 85 C35 85, 28 78, 28 68 C28 62, 30 58, 33 55 C30 52, 28 48, 28 44 C28 38, 31 35, 35 35Z" fill="#5a7a8a" />
+                <circle cx="42" cy="38" r="3" fill="#f5f0e8" />
+                <path d="M55 18 C58 15, 62 16, 64 20 C66 18, 68 19, 68 22 C65 22, 62 20, 60 22" fill="none" stroke="#8ab4c4" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M62 16 C65 14, 68 15, 68 18" fill="none" stroke="#8ab4c4" strokeWidth="1" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h1>Akari 随时都在</h1>
+            <div className="agent-links">
+              <span className="agent-link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                工作台：OH-WorkSpace
+                <ExternalLink size={13} />
+              </span>
+              <span className="agent-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                记忆
+              </span>
+            </div>
           </div>
         )}
         {messages.length > 0 && (
@@ -111,9 +117,10 @@ export function ChatPanel({
             if (file) void onUploadFile(file);
           }}
         />
+        <p className="composer-hint">选中页面任意文字，会浮出一个临时输入框</p>
         <textarea
           aria-label="输入对话消息"
-          placeholder="选中页面任意文字，会浮出一个临时输入框"
+          placeholder=""
           value={chatInput}
           onChange={(event) => onChatInputChange(event.target.value)}
           onKeyDown={(event) => {
@@ -143,7 +150,7 @@ export function ChatPanel({
           <button aria-label="唤起能力">
             <Sparkles size={17} />
           </button>
-          <button>自动审核</button>
+          <button>操作前询问</button>
           <span />
           <button>请选择模型</button>
           {sendingChat && (

@@ -1,22 +1,29 @@
 import { PanelLeft, PanelRight } from "lucide-react";
 
-export function Titlebar() {
+interface TitlebarProps {
+  leftCollapsed: boolean;
+  rightCollapsed: boolean;
+  onToggleLeft: () => void;
+  onToggleRight: () => void;
+}
+
+export function Titlebar({ leftCollapsed, rightCollapsed, onToggleLeft, onToggleRight }: TitlebarProps) {
   return (
     <header className="app-titlebar">
-      <div className="window-controls" aria-hidden="true">
-        <span className="traffic red" />
-        <span className="traffic yellow" />
-        <span className="traffic green" />
-        <button aria-label="切换左侧栏">
-          <PanelLeft size={17} />
-        </button>
-      </div>
-      <div className="titlebar-tabs" role="tablist" aria-label="主视图">
-        <button className="active">聊天</button>
-        <button>频道</button>
-      </div>
-      <button className="titlebar-right" aria-label="切换右侧栏">
-        <PanelRight size={17} />
+      <button
+        className={`titlebar-toggle ${leftCollapsed ? "collapsed" : ""}`}
+        aria-label={leftCollapsed ? "展开左侧栏" : "收起左侧栏"}
+        onClick={onToggleLeft}
+      >
+        <PanelLeft size={15} />
+      </button>
+      <div className="titlebar-center">Akari</div>
+      <button
+        className={`titlebar-toggle ${rightCollapsed ? "collapsed" : ""}`}
+        aria-label={rightCollapsed ? "展开右侧栏" : "收起右侧栏"}
+        onClick={onToggleRight}
+      >
+        <PanelRight size={15} />
       </button>
     </header>
   );

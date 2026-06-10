@@ -6,24 +6,23 @@ Akari 是考公备考 Agent 新项目的 clean-room 起点。
 
 ## 当前骨架
 
-- `backend/`：FastAPI + SQLAlchemy + SQLite。planner/practice/profile 端点 + DeepSeek Agent（WebSocket 流式对话 + 6 planner tools + abort）+ Settings UI。
-- `desktop/`：Electron 主进程 + React 19 + Vite 前端。三栏布局（会话/聊天/工作台），流式聊天 UI，任务番茄钟。
-- `shared/exam-schema.ts`：前端领域类型镜像。
-- `tests/`：后端 smoke test。
+- `server/`：Express + better-sqlite3。planner/practice/profile 端点 + DeepSeek Agent（WebSocket 流式对话 + 12 tools + abort）+ Workspace 文件系统 API + Settings UI。
+- `desktop/`：Electron 主进程 + React 19 + Vite 前端。三栏布局（会话/聊天/工作台），流式聊天 UI，任务番茄钟，Workspace 文件树预览。
+- `shared/exam-schema.ts`：前后端共享领域类型。
+- `server/__tests__/`：Vitest 测试套件。
 
 ### 环境变量
 
 | 变量 | 默认值 | 用途 |
 |------|--------|------|
-| `DEEPSEEK_API_KEY` | — | LLM API key（可在 Settings UI 配置，无需进程重启） |
+| `DEEPSEEK_API_KEY` | — | LLM API key（可在 Settings UI 配置） |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API 地址 |
 | `DEEPSEEK_MODEL` | `deepseek-v4-flash` | 模型名 |
+| `AKARI_WORKSPACE_PATH` | `~/Desktop/Akari-WorkSpace` | Workspace 根目录 |
 
 ## 本地运行
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt pytest
 npm install --legacy-peer-deps
 ```
 
@@ -83,6 +82,7 @@ bash scripts/fix-electron-macos.sh
 
 - `docs/superpowers/specs/2026-06-10-phase1-mvp-design.md`：**Phase 1–3 MVP 完整规格（当前路线图）**。
 - `docs/superpowers/specs/2026-06-09-exam-agent-design.md`：总体技术设计、架构决策、版权策略。
+- `docs/superpowers/specs/2026-06-10-workspace-design.md`：Workspace 文件系统设计。
 - `docs/superpowers/specs/exam-domain-model.md`：API 契约、领域模型、数据流。
 - `docs/superpowers/specs/ORIGINALITY.md`：原创性与迁移审计边界。
 - `docs/HANDOFF.md`：交接文稿（当前状态、已验证流程、待完成项）。
