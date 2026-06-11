@@ -2,7 +2,7 @@ import { Check, Clock3, Plus, Trash2, X } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import type { DailyTask, ErrorCandidate, FileNode, GoalTree, PlanVersionSummary, TaskDifficulty, TaskFocus, TaskStatus, TaskType, TimeSlot } from "../../../../../shared/exam-schema";
 import type { DailyFeedbackResponse, WeeklyReviewResponse } from "../../services/types";
-import { formatAppDate, shortDate, slotLabel, taskTypeOptions } from "../../utils";
+import { formatAppDate, shortDate, slotLabel, taskDifficultyOptions, taskFocusOptions, taskTypeOptions, timeSlots } from "../../utils";
 import { FilePreview } from "../workspace/FilePreview";
 import { FileTree } from "../workspace/FileTree";
 
@@ -18,7 +18,6 @@ interface WorkbenchProps {
   onFileSelect: (path: string) => void;
   onFileDelete: (path: string) => void;
   onFileRename: (path: string) => void;
-  readingFile: boolean;
   onExitReading: () => void;
   goal: GoalTree | null;
   daysLeft: number;
@@ -94,7 +93,6 @@ export function Workbench({
   onFileSelect,
   onFileDelete,
   onFileRename,
-  readingFile,
   onExitReading,
   goal,
   daysLeft,
@@ -166,11 +164,15 @@ export function Workbench({
     event.dataTransfer.dropEffect = "move";
   }
 
+  function setDragOver(nextKey: string | null) {
+    setDragOverKey((currentKey) => currentKey === nextKey ? currentKey : nextKey);
+  }
+
   function dropOnEmpty(date: string, timeSlot: TimeSlot) {
     if (!draggingTask) return;
     onMoveTask(draggingTask, { date, time_slot: timeSlot });
     setDraggingTask(null);
-    setDragOverKey(null);
+    setDragOver(null);
   }
 
   function dropOnTask(event: DragEvent, targetTask: DailyTask) {
@@ -182,7 +184,7 @@ export function Workbench({
     const afterTaskId = beforeTaskId ? undefined : targetTask.id;
     onMoveTask(draggingTask, { date: targetTask.date, time_slot: targetTask.time_slot, beforeTaskId, afterTaskId });
     setDraggingTask(null);
-    setDragOverKey(null);
+    setDragOver(null);
   }
 
   return (
@@ -375,7 +377,7 @@ export function Workbench({
 
             {viewMode === "today" ? (
               <>
-                {(["morning", "afternoon", "evening"] as TimeSlot[]).map((slot) => (
+                {timeSlots.map((slot) => (
                   <div className="slot-group" key={slot}>
                     <div className="slot-label">
                       <span>{slotLabel[slot]}</span>
@@ -385,8 +387,8 @@ export function Workbench({
                     </div>
                     <div
                       className={dragOverKey === `today:${slot}` ? "slot-tasks drag-over" : "slot-tasks"}
-                      onDragOver={(event) => { allowDrop(event); setDragOverKey(`today:${slot}`); }}
-                      onDragLeave={() => setDragOverKey(null)}
+                      onDragOver={(event) => { allowDrop(event); setDragOver(`today:${slot}`); }}
+                      onDragLeave={() => setDragOver(null)}
                       onDrop={() => dropOnEmpty(formatAppDate(new Date()), slot)}
                     >
                       {draftSlot === slot && (
@@ -427,7 +429,7 @@ export function Workbench({
                           onOpenTimer={onOpenTimer}
                           isDragging={draggingTask?.id === task.id}
                           onDragStartTask={setDraggingTask}
-                          onDragEndTask={() => { setDraggingTask(null); setDragOverKey(null); }}
+                          onDragEndTask={() => { setDraggingTask(null); setDragOver(null); }}
                           onDropOnTask={dropOnTask}
                         />
                       ))}
@@ -455,8 +457,8 @@ export function Workbench({
                         </header>
                         <div
                           className={dragOverKey === `week:${day.date}` ? "week-day-body drag-over" : "week-day-body"}
-                          onDragOver={(event) => { allowDrop(event); setDragOverKey(`week:${day.date}`); }}
-                          onDragLeave={() => setDragOverKey(null)}
+                          onDragOver={(event) => { allowDrop(event); setDragOver(`week:${day.date}`); }}
+                          onDragLeave={() => setDragOver(null)}
                           onDrop={() => draggingTask && dropOnEmpty(day.date, draggingTask.time_slot)}
                         >
                           {tasks.map((task) => (
@@ -472,7 +474,7 @@ export function Workbench({
                               onOpenTimer={onOpenTimer}
                               isDragging={draggingTask?.id === task.id}
                               onDragStartTask={setDraggingTask}
-                              onDragEndTask={() => { setDraggingTask(null); setDragOverKey(null); }}
+                              onDragEndTask={() => { setDraggingTask(null); setDragOver(null); }}
                               onDropOnTask={dropOnTask}
                             />
                           ))}
@@ -621,7 +623,7 @@ function TaskCard({
 
 
   return (
-    <>
+    <div className="task-card-stack">
     <div
       className={`${task.status === "completed" ? "daily-task compact-task done" : "daily-task compact-task"}${variant === "week" ? " week-compact-task" : ""}${isDragging ? " is-dragging" : ""}`}
       draggable
@@ -667,11 +669,7 @@ function TaskCard({
             />
           </label>
           <div className="feedback-segment" aria-label="难度">
-            {([
-              ["easy", "轻松"],
-              ["ok", "适中"],
-              ["hard", "吃力"],
-            ] as Array<[TaskDifficulty, string]>).map(([value, label]) => (
+            {taskDifficultyOptions.map(({ value, label }) => (
               <button
                 key={value}
                 className={feedbackDifficulty === value ? "active" : ""}
@@ -683,12 +681,7 @@ function TaskCard({
           </div>
         </div>
         <div className="feedback-segment wide" aria-label="状态">
-          {([
-            ["focused", "专注"],
-            ["normal", "正常"],
-            ["distracted", "分心"],
-            ["tired", "疲惫"],
-          ] as Array<[TaskFocus, string]>).map(([value, label]) => (
+          {taskFocusOptions.map(({ value, label }) => (
             <button
               key={value}
               className={feedbackFocus === value ? "active" : ""}
@@ -714,6 +707,6 @@ function TaskCard({
         </div>
       </div>
     )}
-    </>
+    </div>
   );
 }

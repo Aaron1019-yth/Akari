@@ -3,7 +3,7 @@ import { buildGoalTree, getActiveGoal } from "./planner-service.js";
 import { writeFile } from "./workspace-service.js";
 import { toAppDateString } from "./date-utils.js";
 import type { GoalRow, PlanVersionSummaryOut } from "../types.js";
-import type { DailyTask, GoalTree, TimeSlot } from "../../shared/exam-schema.js";
+import type { DailyTask, GoalTree, TaskStatus, TimeSlot } from "../../shared/exam-schema.js";
 
 const SLOT_LABEL: Record<TimeSlot, string> = {
   morning: "上午",
@@ -11,7 +11,7 @@ const SLOT_LABEL: Record<TimeSlot, string> = {
   evening: "晚上",
 };
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<TaskStatus, string> = {
   pending: "待开始",
   in_progress: "进行中",
   completed: "已完成",

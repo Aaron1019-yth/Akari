@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { FileText, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { formatFileSize, getPathName, isMarkdownFile, splitWorkspacePath } from "../../utils";
 
 interface FilePreviewProps {
   path: string | null;
@@ -20,10 +22,10 @@ export function FilePreview({ path, content, mime, size, loading, onClose }: Fil
     );
   }
 
-  const isMarkdown = mime === "text/markdown" || path.endsWith(".md");
-  const fileName = path.split(/[\\/]/).pop() || path;
-  const breadcrumbs = path.split(/[\\/]/).filter(Boolean);
-  const lineCount = content ? content.split("\n").length : 0;
+  const isMarkdown = isMarkdownFile(path, mime);
+  const fileName = getPathName(path);
+  const breadcrumbs = splitWorkspacePath(path);
+  const lineCount = useMemo(() => content ? content.split("\n").length : 0, [content]);
 
   return (
     <div className="file-preview vscode-preview">
@@ -61,15 +63,8 @@ export function FilePreview({ path, content, mime, size, loading, onClose }: Fil
       <div className="file-statusbar">
         <span>{mime}</span>
         <span>{lineCount} 行</span>
-        <span>{formatSize(size)}</span>
+        <span>{formatFileSize(size)}</span>
       </div>
     </div>
   );
-}
-
-function formatSize(bytes: number): string {
-  if (!bytes) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

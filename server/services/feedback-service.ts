@@ -170,7 +170,7 @@ export function saveTaskFeedback(
   return { feedback: taskFeedbackToOut(row), goal: buildGoalTree(goal) };
 }
 
-export function createLearningArtifact(payload: LearningArtifactRequest): LearningArtifactOut {
+function createLearningArtifactRow(payload: LearningArtifactRequest): LearningArtifactRow {
   if (payload.daily_task_id) getTask(payload.daily_task_id);
   const artifactId = id("artifact");
   const now = nowIso();
@@ -188,8 +188,11 @@ export function createLearningArtifact(payload: LearningArtifactRequest): Learni
     JSON.stringify(payload.metadata),
     now,
   );
-  const row = db.prepare("SELECT * FROM learning_artifacts WHERE id = ?").get(artifactId) as LearningArtifactRow;
-  return artifactToOut(row);
+  return db.prepare("SELECT * FROM learning_artifacts WHERE id = ?").get(artifactId) as LearningArtifactRow;
+}
+
+export function createLearningArtifact(payload: LearningArtifactRequest): LearningArtifactOut {
+  return artifactToOut(createLearningArtifactRow(payload));
 }
 
 function modulesForActiveGoal(): ModuleRow[] {
@@ -217,21 +220,24 @@ function inferModule(text: string, dailyTaskId: string | null): ModuleRow | unde
   return modules.find((module) => text.includes(module.name)) || modules[0];
 }
 
+const CAUSE_RULES = [
+  { keyword: "计算", cause: "计算过程不稳" },
+  { keyword: "审题", cause: "审题不稳" },
+];
+
+function inferCause(text: string): string {
+  return CAUSE_RULES.find((rule) => text.includes(rule.keyword))?.cause ?? "需要进一步复盘错因";
+}
+
 export function generateErrorCandidate(payload: ErrorCandidateGenerateRequest): ErrorCandidateOut {
-  let artifact: LearningArtifactRow;
-  if (payload.artifact_id) {
-    artifact = getArtifact(payload.artifact_id);
-  } else {
-    artifact = createLearningArtifact({
-      source_type: "manual",
-      source_ref: "",
-      daily_task_id: payload.daily_task_id ?? null,
-      title: "手动错题材料",
-      raw_text: payload.text ?? "",
-      metadata: {},
-    }) as unknown as LearningArtifactRow;
-    artifact = getArtifact(artifact.id);
-  }
+  const artifact = payload.artifact_id ? getArtifact(payload.artifact_id) : createLearningArtifactRow({
+    source_type: "manual",
+    source_ref: "",
+    daily_task_id: payload.daily_task_id ?? null,
+    title: "手动错题材料",
+    raw_text: payload.text ?? "",
+    metadata: {},
+  });
 
   const text = [artifact.title, artifact.raw_text, payload.text, payload.hint].filter(Boolean).join("\n");
   const dailyTaskId = payload.daily_task_id ?? artifact.daily_task_id;
@@ -240,11 +246,7 @@ export function generateErrorCandidate(payload: ErrorCandidateGenerateRequest): 
   const now = nowIso();
   const candidateId = id("candidate");
   const questionSummary = text.trim().slice(0, 120) || "待补充题目摘要";
-  const cause = text.includes("计算")
-    ? "计算过程不稳"
-    : text.includes("审题")
-      ? "审题不稳"
-      : "需要进一步复盘错因";
+  const cause = inferCause(text);
 
   db.prepare(
     `INSERT INTO error_candidates

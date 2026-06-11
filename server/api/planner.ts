@@ -26,7 +26,6 @@ import {
 
 const router = Router();
 
-// GET /api/planner/goal
 router.get("/goal", (_req: Request, res: Response) => {
   const goal = getActiveGoal();
   if (!goal) {
@@ -36,7 +35,6 @@ router.get("/goal", (_req: Request, res: Response) => {
   res.json(buildGoalTree(goal));
 });
 
-// POST /api/planner/generate
 router.post("/generate", (req: Request, res: Response) => {
   const parsed = GeneratePlanRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -48,19 +46,16 @@ router.post("/generate", (req: Request, res: Response) => {
   res.json(tree);
 });
 
-// GET /api/planner/today
 router.get("/today", (_req: Request, res: Response) => {
   const dateStr = toAppDateString();
   const tasks = getTasksForDate(dateStr);
   res.json({ date: dateStr, tasks });
 });
 
-// GET /api/planner/versions
 router.get("/versions", (_req: Request, res: Response) => {
   res.json({ versions: listPlanVersions() });
 });
 
-// POST /api/planner/versions/:goalId/restore
 router.post("/versions/:goalId/restore", (req: Request, res: Response) => {
   const goalId = req.params.goalId as string;
   try {
@@ -74,7 +69,6 @@ router.post("/versions/:goalId/restore", (req: Request, res: Response) => {
   }
 });
 
-// POST /api/planner/document/sync
 router.post("/document/sync", (_req: Request, res: Response) => {
   const path = syncActivePlanDocument();
   if (!path) {
@@ -84,7 +78,6 @@ router.post("/document/sync", (_req: Request, res: Response) => {
   res.json({ document_path: path });
 });
 
-// PATCH /api/planner/task/:taskId
 router.patch("/task/:taskId", (req: Request, res: Response) => {
   const taskId = req.params.taskId as string;
   const parsed = TaskPatchRequest.safeParse(req.body);
@@ -107,7 +100,6 @@ router.patch("/task/:taskId", (req: Request, res: Response) => {
   res.json(buildGoalTree(goal));
 });
 
-// PATCH /api/planner/task/:taskId/feedback
 router.patch("/task/:taskId/feedback", (req: Request, res: Response) => {
   const taskId = req.params.taskId as string;
   const parsed = TaskFeedbackRequest.safeParse(req.body);
@@ -127,7 +119,6 @@ router.patch("/task/:taskId/feedback", (req: Request, res: Response) => {
   }
 });
 
-// POST /api/planner/task
 router.post("/task", (req: Request, res: Response) => {
   const parsed = TaskCreateRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -149,7 +140,6 @@ router.post("/task", (req: Request, res: Response) => {
   res.json(buildGoalTree(goal));
 });
 
-// DELETE /api/planner/task/:taskId
 router.delete("/task/:taskId", (req: Request, res: Response) => {
   const taskId = req.params.taskId as string;
   try {
@@ -167,7 +157,6 @@ router.delete("/task/:taskId", (req: Request, res: Response) => {
   res.json(buildGoalTree(goal));
 });
 
-// POST /api/planner/adapt
 router.post("/adapt", (_req: Request, res: Response) => {
   const goal = getActiveGoal();
   if (!goal) {

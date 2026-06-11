@@ -1,8 +1,10 @@
 import type {
   FileNode,
   ErrorCandidate,
+  ErrorCandidateStatus,
   GoalTree,
   LearningArtifact,
+  LearningArtifactSource,
   PlanVersionSummary,
   PlanCardPayload,
   StudyReview,
@@ -111,7 +113,7 @@ export type PlanDocumentSyncResponse = {
 };
 
 export type LearningArtifactPayload = {
-  source_type: "manual" | "workspace_file" | "chat";
+  source_type: LearningArtifactSource;
   source_ref?: string;
   daily_task_id?: string | null;
   title?: string;
@@ -139,7 +141,7 @@ export type ErrorCandidatesResponse = {
 };
 
 export type ErrorCandidatePatchPayload = {
-  status?: "pending" | "confirmed" | "dismissed";
+  status?: ErrorCandidateStatus;
   daily_task_id?: string | null;
   module_id?: string | null;
   subject?: string;

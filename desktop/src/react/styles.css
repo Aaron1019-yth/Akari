@@ -1727,6 +1727,11 @@ h2 {
   outline-offset: 2px;
 }
 
+.task-card-stack {
+  display: grid;
+  gap: 0;
+}
+
 .daily-task,
 .task-editor {
   display: grid;

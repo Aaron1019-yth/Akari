@@ -1,4 +1,4 @@
-import type { TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
+import type { TaskDifficulty, TaskFocus, TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
 
 export const statusLabel: Record<TaskStatus, string> = {
   pending: "待开始",
@@ -13,12 +13,54 @@ export const slotLabel: Record<TimeSlot, string> = {
   evening: "晚上"
 };
 
+export const timeSlots: TimeSlot[] = ["morning", "afternoon", "evening"];
+
 export const taskTypeOptions: Array<{ label: string; value: TaskType }> = [
   { label: "综合", value: "study" },
   { label: "练题", value: "practice" },
   { label: "复习", value: "review" },
   { label: "模考", value: "mock_exam" },
   { label: "申论", value: "essay" }
+];
+
+export const taskDifficultyOptions: Array<{ label: string; value: TaskDifficulty }> = [
+  { label: "轻松", value: "easy" },
+  { label: "适中", value: "ok" },
+  { label: "吃力", value: "hard" },
+];
+
+export const taskFocusOptions: Array<{ label: string; value: TaskFocus }> = [
+  { label: "专注", value: "focused" },
+  { label: "正常", value: "normal" },
+  { label: "分心", value: "distracted" },
+  { label: "疲惫", value: "tired" },
+];
+
+export const supportedUploadExtensions = [
+  ".pdf",
+  ".docx",
+  ".md",
+  ".markdown",
+  ".txt",
+  ".csv",
+  ".tsv",
+  ".json",
+  ".jsonl",
+  ".yaml",
+  ".yml",
+  ".rtf",
+  ".html",
+  ".htm",
+  ".xml",
+  ".tex",
+  ".log",
+  ".ini",
+  ".conf",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".css",
 ];
 
 export const weekDayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -28,6 +70,30 @@ export const uiThemeOptions: Array<{ label: string; value: UiTheme; description:
   { label: "Akari 冷灰蓝", value: "akari_cool", description: "当前更偏工作台的浅灰蓝风格" },
   { label: "经典米色", value: "classic_beige", description: "上一版柔和米色界面" },
 ];
+
+export function formatFileSize(bytes: number): string {
+  if (!bytes) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function getFileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf(".");
+  return dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : "";
+}
+
+export function getPathName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
+}
+
+export function splitWorkspacePath(path: string): string[] {
+  return path.split(/[\\/]/).filter(Boolean);
+}
+
+export function isMarkdownFile(path: string, mime: string): boolean {
+  return mime === "text/markdown" || [".md", ".markdown"].includes(getFileExtension(path));
+}
 
 export function nextExamDate(): string {
   const date = new Date();

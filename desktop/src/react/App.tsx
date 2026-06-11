@@ -9,7 +9,7 @@ import { Titlebar } from "./shared/ui/Titlebar";
 import { api, createChatStream } from "./services/api";
 import type { ChatMessage, DailyTask, ErrorCandidate, FileNode, GoalTree, PlanVersionSummary, TaskDifficulty, TaskFocus, TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
 import type { DailyFeedbackResponse, WeeklyReviewResponse } from "./services/types";
-import { addDays, formatAppDate, nextExamDate, shortDate, taskTypeOptions, toolLabel, weekDayLabels } from "./utils";
+import { addDays, formatAppDate, getFileExtension, getPathName, nextExamDate, shortDate, supportedUploadExtensions, taskTypeOptions, toolLabel, weekDayLabels } from "./utils";
 
 const PANEL_WIDTHS = {
   leftDefault: 232,
@@ -65,7 +65,6 @@ export function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [readingFile, setReadingFile] = useState(false);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewMime, setPreviewMime] = useState("text/plain");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -444,7 +443,6 @@ export function App() {
       });
       await api.generateErrorCandidate({
         artifact_id: artifact.artifact.id,
-        text,
         hint: "用户在工作台提交错题材料，请生成候选错因归因。",
       });
       setWrongQuestionText("");
@@ -465,13 +463,12 @@ export function App() {
       const artifact = await api.createLearningArtifact({
         source_type: "workspace_file",
         source_ref: selectedPath,
-        title: selectedPath.split(/[\\/]/).pop() || selectedPath,
+        title: getPathName(selectedPath),
         raw_text: text,
         metadata: { origin: "workspace_preview", mime: previewMime },
       });
       await api.generateErrorCandidate({
         artifact_id: artifact.artifact.id,
-        text,
         hint: "用户从工作台文件预览提交错题材料，请保留文件证据来源并生成候选错因归因。",
       });
       setActiveWorkbenchTab("plan");
@@ -535,8 +532,8 @@ export function App() {
 
   async function handleUploadFile(file: File) {
     setUploadError(null);
-    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
-    if (![".pdf", ".docx", ".md", ".markdown", ".txt", ".csv", ".tsv", ".json", ".jsonl", ".yaml", ".yml", ".rtf", ".html", ".htm", ".xml", ".tex", ".log"].includes(ext)) {
+    const ext = getFileExtension(file.name);
+    if (!supportedUploadExtensions.includes(ext)) {
       setUploadError("仅支持 PDF、Word 和常见文本文件");
       return;
     }
@@ -561,7 +558,6 @@ export function App() {
           created_at: new Date().toISOString(),
         },
       ]);
-      // 自动预览上传的文件
       if (data.file?.path) {
         setSelectedPath(data.file.path);
         setPreviewLoading(true);
@@ -570,7 +566,6 @@ export function App() {
           setPreviewContent(result.content);
           setPreviewMime(result.mime);
           if (result.content !== null) {
-            setReadingFile(true);
             setLeftCollapsed(true);
           }
         } catch {
@@ -782,7 +777,6 @@ export function App() {
       setPreviewContent(result.content);
       setPreviewMime(result.mime);
       if (result.content !== null) {
-        setReadingFile(true);
         setLeftCollapsed(true);
       }
     } catch {
@@ -873,9 +867,7 @@ export function App() {
           onFileSelect={handleFileSelect}
           onFileDelete={handleFileDelete}
           onFileRename={handleFileRename}
-          readingFile={readingFile}
           onExitReading={() => {
-            setReadingFile(false);
             setLeftCollapsed(false);
             setSelectedPath(null);
             setPreviewContent(null);

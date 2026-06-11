@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
-import { initDatabase } from "./db.js";
+import { db, initDatabase } from "./db.js";
 import plannerRouter from "./api/planner.js";
 import chatRouter, { setupWebSocket } from "./api/chat.js";
 import practiceRouter from "./api/practice.js";
@@ -53,12 +53,26 @@ setupWebSocket(wss);
 // Initialize database on startup
 initDatabase();
 
-// Skip listening in test mode — supertest handles the app directly
 if (!process.env.AKARI_TEST) {
   const PORT = parseInt(process.env.PORT || "8742", 10);
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`Akari API running on http://127.0.0.1:${PORT}`);
   });
+
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close(() => {
+      wss.close();
+      db.close();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 5000).unref();
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 export { app, wss };

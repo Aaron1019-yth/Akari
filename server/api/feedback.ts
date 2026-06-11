@@ -19,7 +19,6 @@ import { toAppDateString } from "../services/date-utils.js";
 
 const router = Router();
 
-// POST /api/feedback/artifacts
 router.post("/artifacts", (req: Request, res: Response) => {
   const parsed = LearningArtifactRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -37,7 +36,6 @@ router.post("/artifacts", (req: Request, res: Response) => {
   }
 });
 
-// POST /api/feedback/candidates/generate
 router.post("/candidates/generate", (req: Request, res: Response) => {
   const parsed = ErrorCandidateGenerateRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -55,13 +53,11 @@ router.post("/candidates/generate", (req: Request, res: Response) => {
   }
 });
 
-// GET /api/feedback/candidates?status=pending
 router.get("/candidates", (req: Request, res: Response) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   res.json({ candidates: listErrorCandidates(status) });
 });
 
-// PATCH /api/feedback/candidates/:candidateId
 router.patch("/candidates/:candidateId", (req: Request, res: Response) => {
   const candidateId = req.params.candidateId as string;
   const parsed = ErrorCandidatePatchRequest.safeParse(req.body);
@@ -80,13 +76,11 @@ router.patch("/candidates/:candidateId", (req: Request, res: Response) => {
   }
 });
 
-// GET /api/feedback/daily?date=YYYY-MM-DD
 router.get("/daily", (req: Request, res: Response) => {
   const date = typeof req.query.date === "string" ? req.query.date : toAppDateString();
   res.json(getDailyFeedback(date));
 });
 
-// POST /api/feedback/weekly
 router.post("/weekly", (req: Request, res: Response) => {
   const parsed = WeeklyReviewRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -96,7 +90,6 @@ router.post("/weekly", (req: Request, res: Response) => {
   res.json({ review: createWeeklyReview(parsed.data) });
 });
 
-// GET /api/feedback/weekly?week_start=YYYY-MM-DD
 router.get("/weekly", (req: Request, res: Response) => {
   const weekStart = typeof req.query.week_start === "string" ? req.query.week_start : "";
   if (!weekStart) {

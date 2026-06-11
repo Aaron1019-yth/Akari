@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FileNode } from "../../../../../shared/exam-schema";
+import { formatFileSize } from "../../utils";
 
 interface FileTreeProps {
   tree: FileNode[];
@@ -93,7 +94,7 @@ function FileTreeNode({
         )}
         <span className="filetree-name">{node.name}</span>
         {!isDir && (
-          <span className="filetree-size">{formatSize(node.size)}</span>
+          <span className="filetree-size">{formatFileSize(node.size)}</span>
         )}
 
         {menuOpen && (
@@ -127,10 +128,4 @@ function FileTreeNode({
       )}
     </div>
   );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
