@@ -567,7 +567,7 @@ Translation from `backend/services/planner_service.py` (327 lines). 8 张表的 
 
 - [ ] **Step 1: 验证全部通过** — `npm run build && npm run test:api`
 - [ ] **Step 2: 删除 Python 文件**
-- [ ] **Step 3: 更新 HANDOFF.md + CLAUDE.md**
+- [ ] **Step 3: 更新 Akari-design-v1.handoff.md + CLAUDE.md**
 
 ---
 

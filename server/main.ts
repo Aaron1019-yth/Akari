@@ -10,6 +10,7 @@ import profileRouter from "./api/profile.js";
 import settingsRouter from "./api/settings.js";
 import sessionsRouter from "./api/sessions.js";
 import workspaceRouter from "./api/workspace.js";
+import feedbackRouter from "./api/feedback.js";
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/workspace", workspaceRouter);
+app.use("/api/feedback", feedbackRouter);
 
 // HTTP server (shared by Express + WebSocket)
 const server = createServer(app);

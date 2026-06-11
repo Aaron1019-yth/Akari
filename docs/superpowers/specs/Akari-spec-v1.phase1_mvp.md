@@ -4,7 +4,7 @@
 > **Phase 2**：学习总结与反馈 — 用户录入每日错题与感受，自动生成周总结报告。
 > **Phase 3**：计划自适应调整 — 基于总结数据动态优化下周计划。
 
-> **实现状态（2026-06-10）**：Phase 1 MVP 已完成，验收记录见 `docs/PHASE_COMPLETION_LOG.md`。当前进入 Phase 1.5，重点为 UI/体验优化、会话管理、历史摘要与工程分层 polish。
+> **实现状态（2026-06-10）**：Phase 1 MVP 已完成，验收记录见 `docs/Akari-spec-v1.completion_log.md`。当前进入 Phase 1.5，重点为 UI/体验优化、会话管理、历史摘要与工程分层 polish。
 
 ---
 

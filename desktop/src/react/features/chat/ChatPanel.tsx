@@ -1,14 +1,13 @@
-import { ExternalLink, Loader2, Plus, Sparkles } from "lucide-react";
-import type { ChatMessage, GoalTree } from "../../../../shared/exam-schema";
+import { ExternalLink, Loader2, Plus } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import type { ChatMessage, GoalTree } from "../../../../../shared/exam-schema";
 
 interface ChatPanelProps {
   loading: boolean;
   error: string | null;
-  goal: GoalTree | null;
   messages: ChatMessage[];
   sendingChat: boolean;
   currentToolLabel: string | null;
-  filesCount: number;
   chatInput: string;
   onChatInputChange: (value: string) => void;
   uploadingFile: string | null;
@@ -17,7 +16,6 @@ interface ChatPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onSend: () => void;
   onAbort: () => void;
-  onCreatePlan: () => void;
   onUploadFile: (file: File) => void;
   onCancelUpload: () => void;
 }
@@ -25,11 +23,9 @@ interface ChatPanelProps {
 export function ChatPanel({
   loading,
   error,
-  goal,
   messages,
   sendingChat,
   currentToolLabel,
-  filesCount,
   chatInput,
   onChatInputChange,
   uploadingFile,
@@ -38,7 +34,6 @@ export function ChatPanel({
   fileInputRef,
   onSend,
   onAbort,
-  onCreatePlan,
   onUploadFile,
   onCancelUpload,
 }: ChatPanelProps) {
@@ -59,16 +54,7 @@ export function ChatPanel({
       <section className="conversation" ref={conversationRef}>
         {loading && <p className="muted">正在连接 Akari 后端...</p>}
         {error && <p className="error">{error}</p>}
-        {!loading && !goal && (
-          <div className="onboarding">
-            <h2>还没有 active Goal</h2>
-            <p>先生成一份规则版计划，后续再接入规划师 Agent 和诊断对话。</p>
-            <button className="primary" onClick={onCreatePlan}>
-              生成第一周计划
-            </button>
-          </div>
-        )}
-        {goal && messages.length === 0 && (
+        {!loading && messages.length === 0 && (
           <div className="agent-empty">
             <div className="agent-avatar-new">
               <svg viewBox="0 0 100 100" width="72" height="72">
@@ -98,7 +84,11 @@ export function ChatPanel({
             {messages.map((message, index) => (
               <article className={`chat-message ${message.role}`} key={`${message.created_at}-${index}`}>
                 <span>{message.role === "user" ? "你" : "Akari"}</span>
-                <p>{message.content}</p>
+                {message.role === "assistant" ? (
+                  <div className="markdown-body"><ReactMarkdown>{message.content}</ReactMarkdown></div>
+                ) : (
+                  <p>{message.content}</p>
+                )}
               </article>
             ))}
           </div>
@@ -110,17 +100,16 @@ export function ChatPanel({
           ref={fileInputRef}
           hidden
           type="file"
-          accept=".pdf,.docx"
+          accept=".pdf,.docx,.md,.markdown,.txt,.csv,.tsv,.json,.jsonl,.yaml,.yml,.rtf,.html,.htm,.xml,.tex,.log"
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.currentTarget.value = "";
             if (file) void onUploadFile(file);
           }}
         />
-        <p className="composer-hint">选中页面任意文字，会浮出一个临时输入框</p>
         <textarea
           aria-label="输入对话消息"
-          placeholder=""
+          placeholder="告诉我你的考试目标..."
           value={chatInput}
           onChange={(event) => onChatInputChange(event.target.value)}
           onKeyDown={(event) => {
@@ -147,12 +136,6 @@ export function ChatPanel({
           <button aria-label="添加附件" onClick={() => fileInputRef.current?.click()}>
             <Plus size={18} />
           </button>
-          <button aria-label="唤起能力">
-            <Sparkles size={17} />
-          </button>
-          <button>操作前询问</button>
-          <span />
-          <button>请选择模型</button>
           {sendingChat && (
             <>
               <button className="abort-button" onClick={onAbort}>中断</button>

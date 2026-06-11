@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
-import type { UiTheme } from "../../../../shared/exam-schema";
-import { uiThemeOptions } from "../utils";
+import type { UiTheme } from "../../../../../shared/exam-schema";
+import { uiThemeOptions } from "../../utils";
 
 interface SettingsModalProps {
   show: boolean;

@@ -11,12 +11,18 @@ Node.js/TypeScript 后端 + React/Vite 前端 + Electron 桌面壳。
 ## 启动
 
 ```bash
-npm run dev:api      # 后端 :8742
-npm run dev          # 前端 :5173
-npm run dev:desktop  # Electron 桌面版
+npm run dev:web      # Web: 后端 :8742 + 前端 :5173
+npm run dev:desktop  # Electron: 后端 + 前端 + 桌面壳
 ```
 
 打开 `http://127.0.0.1:5173/`。
+
+调试时也可以分开启动：
+
+```bash
+npm run dev:api
+npm run dev
+```
 
 ## 检查
 
@@ -66,8 +72,13 @@ server/
 
 desktop/src/react/
 ├── App.tsx
-├── components/          # Titlebar, Sidebar, ChatPanel, Workbench, FileTree, FilePreview, SettingsModal, ErrorBoundary, ThemeToggle
-├── services/api.ts      # REST + WebSocket 客户端
+├── features/
+│   ├── chat/            # Sidebar + ChatPanel
+│   ├── settings/        # SettingsModal
+│   ├── workbench/       # Workbench planning surface
+│   └── workspace/       # FileTree + FilePreview
+├── services/            # REST + WebSocket 客户端和 transport 类型
+├── shared/ui/           # Titlebar + ErrorBoundary
 └── utils.ts
 
 shared/exam-schema.ts    # 前后端共享类型
@@ -98,8 +109,12 @@ shared/exam-schema.ts    # 前后端共享类型
 
 | 文档 | 内容 |
 |------|------|
-| `docs/HANDOFF.md` | 交接文稿：当前状态、已验证流程、待完成项 |
-| `docs/superpowers/specs/2026-06-10-phase1-mvp-design.md` | **Phase 1–3 规格**（当前路线图） |
-| `docs/superpowers/specs/2026-06-09-exam-agent-design.md` | 总体技术设计、数据模型、版权策略 |
-| `docs/superpowers/plans/2026-06-10-backend-nodejs-migration.md` | 后端迁移计划 |
-| `docs/superpowers/specs/2026-06-10-workspace-design.md` | Workspace 设计规格 |
+| `docs/Akari-spec-v1.roadmap.md` | **版本路线图**（V1/V1.1/V1.2/V2/V3） |
+| `docs/Akari-design-v1.handoff.md` | 交接文稿：当前状态、已验证流程、待完成项 |
+| `docs/Akari-spec-v1.completion_log.md` | 各阶段验收记录 |
+| `docs/Akari-v1-demo-script.md` | V1 演示与验收 checklist |
+| `docs/Akari-design-v2.feedback.md` | V2 学习反馈、错题归因与复盘设计草案 |
+| `docs/Akari-design-v2.plan_workspace.md` | V2 计划工作台、Markdown 同步、版本管理与粉笔导入设计 |
+| `docs/superpowers/specs/Akari-spec-v1.phase1_mvp.md` | Phase 1–3 功能规格（参考） |
+| `docs/superpowers/specs/Akari-design-v1.exam_agent.md` | 总体技术设计、数据模型、版权策略 |
+| `docs/superpowers/specs/Akari-design-v1.workspace.md` | Workspace 设计规格 |

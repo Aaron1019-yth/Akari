@@ -13,7 +13,16 @@ import {
   GeneratePlanRequest,
   TaskPatchRequest,
   TaskCreateRequest,
+  TaskFeedbackRequest,
 } from "../types.js";
+import { FeedbackError, saveTaskFeedback } from "../services/feedback-service.js";
+import { toAppDateString } from "../services/date-utils.js";
+import {
+  listPlanVersions,
+  PlanDocumentError,
+  restorePlanVersion,
+  syncActivePlanDocument,
+} from "../services/plan-document-service.js";
 
 const router = Router();
 
@@ -35,15 +44,44 @@ router.post("/generate", (req: Request, res: Response) => {
     return;
   }
   const tree = generateInitialPlan(parsed.data);
+  syncActivePlanDocument();
   res.json(tree);
 });
 
 // GET /api/planner/today
 router.get("/today", (_req: Request, res: Response) => {
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dateStr = toAppDateString();
   const tasks = getTasksForDate(dateStr);
   res.json({ date: dateStr, tasks });
+});
+
+// GET /api/planner/versions
+router.get("/versions", (_req: Request, res: Response) => {
+  res.json({ versions: listPlanVersions() });
+});
+
+// POST /api/planner/versions/:goalId/restore
+router.post("/versions/:goalId/restore", (req: Request, res: Response) => {
+  const goalId = req.params.goalId as string;
+  try {
+    res.json({ goal: restorePlanVersion(goalId), document_path: "plans/current-plan.md" });
+  } catch (exc) {
+    if (exc instanceof PlanDocumentError) {
+      res.status(404).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
+// POST /api/planner/document/sync
+router.post("/document/sync", (_req: Request, res: Response) => {
+  const path = syncActivePlanDocument();
+  if (!path) {
+    res.status(404).json({ detail: "Active goal not found" });
+    return;
+  }
+  res.json({ document_path: path });
 });
 
 // PATCH /api/planner/task/:taskId
@@ -56,6 +94,7 @@ router.patch("/task/:taskId", (req: Request, res: Response) => {
   }
   try {
     updateTask(taskId, parsed.data);
+    syncActivePlanDocument();
   } catch {
     res.status(404).json({ detail: "Task not found" });
     return;
@@ -66,6 +105,26 @@ router.patch("/task/:taskId", (req: Request, res: Response) => {
     return;
   }
   res.json(buildGoalTree(goal));
+});
+
+// PATCH /api/planner/task/:taskId/feedback
+router.patch("/task/:taskId/feedback", (req: Request, res: Response) => {
+  const taskId = req.params.taskId as string;
+  const parsed = TaskFeedbackRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ detail: parsed.error.errors });
+    return;
+  }
+  try {
+    const result = saveTaskFeedback(taskId, parsed.data);
+    res.json(result);
+  } catch (exc) {
+    if (exc instanceof FeedbackError) {
+      res.status(404).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
 });
 
 // POST /api/planner/task
@@ -82,6 +141,7 @@ router.post("/task", (req: Request, res: Response) => {
   }
   try {
     createTask(goal, parsed.data);
+    syncActivePlanDocument();
   } catch (err) {
     res.status(400).json({ detail: err instanceof Error ? err.message : "Create task failed" });
     return;
@@ -94,6 +154,7 @@ router.delete("/task/:taskId", (req: Request, res: Response) => {
   const taskId = req.params.taskId as string;
   try {
     deleteTask(taskId);
+    syncActivePlanDocument();
   } catch {
     res.status(404).json({ detail: "Task not found" });
     return;
@@ -114,6 +175,7 @@ router.post("/adapt", (_req: Request, res: Response) => {
     return;
   }
   adaptNextWeek(goal);
+  syncActivePlanDocument();
   res.json(buildGoalTree(goal));
 });
 

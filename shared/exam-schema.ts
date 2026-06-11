@@ -4,6 +4,11 @@ export type TaskType = "study" | "practice" | "mock_exam" | "review" | "essay";
 export type TimeSlot = "morning" | "afternoon" | "evening";
 export type TaskStatus = "pending" | "in_progress" | "completed" | "skipped";
 export type UiTheme = "agent_warm_paper" | "akari_cool" | "classic_beige";
+export type TaskDifficulty = "easy" | "ok" | "hard";
+export type TaskFocus = "focused" | "normal" | "distracted" | "tired";
+export type LearningArtifactSource = "workspace_file" | "chat" | "manual";
+export type ErrorCandidateStatus = "pending" | "confirmed" | "dismissed";
+export type StudyReviewScope = "daily" | "weekly";
 
 export interface Module {
   id: string;
@@ -41,6 +46,71 @@ export interface DailyTask {
   time_slot: TimeSlot;
   status: TaskStatus;
   sort_order: number;
+}
+
+export interface TaskFeedback {
+  id: string;
+  daily_task_id: string;
+  actual_minutes: number;
+  difficulty: TaskDifficulty;
+  focus: TaskFocus;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningArtifact {
+  id: string;
+  source_type: LearningArtifactSource;
+  source_ref: string;
+  daily_task_id: string | null;
+  title: string;
+  raw_text: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ErrorCandidate {
+  id: string;
+  artifact_id: string;
+  daily_task_id: string | null;
+  module_id: string | null;
+  subject: string;
+  question_summary: string;
+  mistake_summary: string;
+  cause: string;
+  suggested_fix: string;
+  confidence: number;
+  status: ErrorCandidateStatus;
+  created_at: string;
+  updated_at: string;
+  confirmed_at: string | null;
+}
+
+export interface StudyReview {
+  id: string;
+  scope: StudyReviewScope;
+  period_start: string;
+  period_end: string;
+  summary: string;
+  stats: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanVersionSummary {
+  goal_id: string;
+  title: string;
+  status: GoalStatus;
+  created_at: string;
+  exam_date: string;
+  week_start: string | null;
+  week_end: string | null;
+  task_count: number;
+  completed_count: number;
+  estimated_minutes: number;
+  actual_minutes: number;
+  document_path: string;
 }
 
 export interface WeeklyPlan {

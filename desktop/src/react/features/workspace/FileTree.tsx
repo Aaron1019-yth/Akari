@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
-import type { FileNode } from "../../../../shared/exam-schema";
+import { useEffect, useRef, useState } from "react";
+import type { FileNode } from "../../../../../shared/exam-schema";
 
 interface FileTreeProps {
   tree: FileNode[];
@@ -49,6 +49,18 @@ function FileTreeNode({
 }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   const isDir = node.type === "directory";
   const isSelected = selectedPath === node.path;
@@ -85,7 +97,7 @@ function FileTreeNode({
         )}
 
         {menuOpen && (
-          <div className="filetree-menu">
+          <div className="filetree-menu" ref={menuRef}>
             {onRename && (
               <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onRename(node.path); }}>
                 <Pencil size={13} /> 重命名

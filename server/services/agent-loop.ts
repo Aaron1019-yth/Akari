@@ -19,7 +19,9 @@ import { createWebTools } from "./tools/web.js";
 const MAX_ROUNDS = 8;
 const SUMMARY_CHAR_THRESHOLD = 64000;
 
-// ── Background summary (fire-and-forget) ──
+// ── Background summary (fire-and-forget, single-concurrency) ──
+
+let summaryRunning = false;
 
 function shouldSummarize(sessionId: string): boolean {
   const p = sessionPath(sessionId);
@@ -31,8 +33,10 @@ function shouldSummarize(sessionId: string): boolean {
 }
 
 function fireSummary(sessionId: string): void {
+  if (summaryRunning) return;
   if (shouldSummarize(sessionId)) {
-    generateSummaryInBackground(sessionId).catch(() => {});
+    summaryRunning = true;
+    generateSummaryInBackground(sessionId).finally(() => { summaryRunning = false; });
   }
 }
 

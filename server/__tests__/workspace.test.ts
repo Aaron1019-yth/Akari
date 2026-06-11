@@ -42,6 +42,21 @@ describe("workspace-service", () => {
     expect(result.mime).toBe("text/markdown");
   });
 
+  it("reads common text document types", async () => {
+    writeFile("data.yaml", "title: Akari");
+    writeFile("notes.rtf", "{\\rtf1 Akari}");
+    const yaml = await readFile("data.yaml");
+    const rtf = await readFile("notes.rtf");
+    expect(yaml.mime).toBe("application/yaml");
+    expect(rtf.mime).toBe("application/rtf");
+  });
+
+  it("loads docx parser", async () => {
+    const mammothModule = await import("mammoth");
+    const mammoth = mammothModule.default ?? mammothModule;
+    expect(typeof mammoth.extractRawText).toBe("function");
+  });
+
   it("writeFile creates parent directories", () => {
     writeFile("notes/2024/plan.md", "# Plan");
     expect(fs.existsSync(path.join(testDir, "notes", "2024", "plan.md"))).toBe(true);

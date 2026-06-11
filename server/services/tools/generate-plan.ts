@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../../db.js";
 import { getActiveGoal, buildPlanCard } from "../planner-service.js";
 import { recalculateProfile } from "../profile-service.js";
+import { syncActivePlanDocument } from "../plan-document-service.js";
 import type { ToolDef, ToolResult } from "../llm-types.js";
 import type {
   DailyTaskRow,
@@ -245,6 +246,7 @@ function generatePlan(weekStart: string, tasks: Record<string, unknown>[]): Tool
     });
 
     writePlan();
+    syncActivePlanDocument();
 
     const card = buildPlanCard();
     return {

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getWorkspacePath } from "../workspace-service.js";
+import { getWorkspacePath, readFile } from "../workspace-service.js";
 import type { ToolDef, ToolResult } from "../llm-types.js";
 
 // ── Tool implementations ──
@@ -35,26 +35,10 @@ async function readDocument(
     return { content: "文件不存在。", ok: false };
   }
 
-  const ext = path.extname(target).toLowerCase();
-
   let text: string;
   try {
-    if (ext === ".pdf") {
-      const dataBuffer = fs.readFileSync(target);
-      const pdfParse = (await import("pdf-parse")).default;
-      const pdfData = await pdfParse(dataBuffer);
-      text = (pdfData.text || "").trim();
-    } else if (ext === ".docx") {
-      const mammoth = (await import("mammoth")).default;
-      const result = await mammoth.extractRawText({ path: target });
-      text = (result.value || "").trim();
-    } else {
-      const buf = fs.readFileSync(target);
-      if (buf.includes(0)) {
-        return { content: "无法读取二进制文件。", ok: false };
-      }
-      text = buf.toString("utf-8");
-    }
+    const file = await readFile(rel);
+    text = file.content;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (

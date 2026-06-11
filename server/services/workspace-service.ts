@@ -2,19 +2,41 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { getSettings, saveSettings } from "./settings-service.js";
+import type { FileNode } from "../../shared/exam-schema.js";
 
-const DEFAULT_WORKSPACE = path.join(os.homedir(), "Desktop", "Akari-WorkSpace");
+const DEFAULT_WORKSPACE =
+  process.env.AKARI_TEST === "1" && process.env.AKARI_DATA_DIR
+    ? path.join(process.env.AKARI_DATA_DIR, "workspace")
+    : path.join(os.homedir(), "Desktop", "Akari-WorkSpace");
 const HIDDEN_PATTERNS = [/^\./, /^node_modules$/, /^\.git$/];
 const MAX_TEXT_SIZE = 500 * 1024;
 
-export interface FileNode {
-  name: string;
-  type: "file" | "directory";
-  path: string;
-  size: number;
-  modified_at: string;
-  children: FileNode[] | null;
-}
+const TEXT_MIME_BY_EXT: Record<string, string> = {
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".tsv": "text/tab-separated-values",
+  ".json": "application/json",
+  ".jsonl": "application/x-ndjson",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+  ".xml": "application/xml",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".rtf": "application/rtf",
+  ".tex": "application/x-tex",
+  ".log": "text/plain",
+  ".ini": "text/plain",
+  ".conf": "text/plain",
+  ".ts": "text/typescript",
+  ".tsx": "text/typescript",
+  ".js": "text/javascript",
+  ".jsx": "text/javascript",
+  ".css": "text/css",
+};
+
+export type { FileNode };
 
 export class WorkspaceError extends Error {
   constructor(message: string) {
@@ -141,7 +163,8 @@ export async function readFile(relPath: string): Promise<FileContent> {
 
   if (ext === ".docx") {
     try {
-      const mammoth = (await import("mammoth")).default;
+      const mammothModule = await import("mammoth");
+      const mammoth = mammothModule.default ?? mammothModule;
       const result = await mammoth.extractRawText({ path: absPath });
       return { content: (result.value || "").trim(), mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", truncated: false };
     } catch (err) {
@@ -168,19 +191,7 @@ export async function readFile(relPath: string): Promise<FileContent> {
   const truncated = content.length > MAX_TEXT_SIZE;
   if (truncated) content = content.slice(0, MAX_TEXT_SIZE) + "\n\n[文件过长，已截断]";
 
-  const mimeMap: Record<string, string> = {
-    ".md": "text/markdown",
-    ".json": "application/json",
-    ".ts": "text/typescript",
-    ".tsx": "text/typescript",
-    ".js": "text/javascript",
-    ".css": "text/css",
-    ".html": "text/html",
-    ".txt": "text/plain",
-    ".csv": "text/csv",
-  };
-
-  return { content, mime: mimeMap[ext] || "text/plain", truncated };
+  return { content, mime: TEXT_MIME_BY_EXT[ext] || "text/plain", truncated };
 }
 
 export function writeFile(relPath: string, content: string): void {

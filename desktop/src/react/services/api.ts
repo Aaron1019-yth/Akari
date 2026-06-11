@@ -1,15 +1,40 @@
 import type {
   ChatRequest,
   ChatResponse,
-  FileNode,
   GeneratePlanRequest,
   GoalTree,
-  PlanCardPayload,
-  TaskCreateRequest,
-  TaskStatus,
-  TimeSlot,
-  UiTheme
+  TaskCreateRequest
 } from "../../../../shared/exam-schema";
+import type {
+  ChatStreamCallbacks,
+  ChatStreamClient,
+  DailyFeedbackResponse,
+  DeleteSessionResponse,
+  ErrorCandidateGeneratePayload,
+  ErrorCandidatePatchPayload,
+  ErrorCandidateResponse,
+  ErrorCandidatesResponse,
+  LearningArtifactPayload,
+  LearningArtifactResponse,
+  LlmSettings,
+  LlmSettingsUpdate,
+  PatchTaskPayload,
+  PlanDocumentSyncResponse,
+  PlanRestoreResponse,
+  PlanVersionsResponse,
+  SessionMessagesResponse,
+  SessionsResponse,
+  TaskFeedbackPayload,
+  TaskFeedbackResponse,
+  WorkspaceFileMutationResponse,
+  WorkspaceFileResponse,
+  WorkspaceInfoResponse,
+  WorkspaceTreeResponse,
+  WorkspaceUploadResponse,
+  WeeklyReviewPayload,
+  WeeklyReviewResponse,
+  WsEvent
+} from "./types";
 
 function apiBase(): string {
   // In production Electron (loadFile), page origin is file:// — need absolute backend URL.
@@ -33,56 +58,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-type LlmSettings = {
-  api_key_masked: string;
-  api_key_is_set: boolean;
-  base_url: string;
-  model: string;
-  tavily_api_key_masked: string;
-  tavily_api_key_is_set: boolean;
-  serper_api_key_masked: string;
-  serper_api_key_is_set: boolean;
-  brave_search_api_key_masked: string;
-  brave_search_api_key_is_set: boolean;
-  ui_theme: UiTheme;
-  workspace_path: string;
-};
-
-type LlmSettingsUpdate = {
-  api_key: string;
-  base_url: string;
-  model: string;
-  tavily_api_key: string;
-  serper_api_key: string;
-  brave_search_api_key: string;
-  ui_theme: UiTheme;
-  workspace_path: string;
-};
-
-type WsEvent = {
-  type: "text_delta" | "tool_start" | "tool_end" | "turn_end" | "error" | "plan_card" | "file_list";
-  delta?: string;
-  name?: string;
-  arguments?: Record<string, unknown>;
-  ok?: boolean;
-  summary?: string;
-  message?: string;
-  card?: PlanCardPayload;
-  files?: FileNode[];
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-};
-
-type ChatStreamCallbacks = {
-  onToken: (delta: string) => void;
-  onToolStart?: (name: string, args: Record<string, unknown>) => void;
-  onToolEnd?: (name: string, ok: boolean, summary: string) => void;
-  onPlanCard?: (card: PlanCardPayload) => void;
-  onFileList?: (files: FileNode[]) => void;
-  onTurnEnd?: () => void;
-  onError?: (message: string) => void;
-};
-
-export function createChatStream(callbacks: ChatStreamCallbacks) {
+export function createChatStream(callbacks: ChatStreamCallbacks): ChatStreamClient {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const host = window.location.protocol === "file:" ? "127.0.0.1:8742" : window.location.host;
   const url = `${protocol}://${host}/api/chat/ws`;
@@ -107,13 +83,13 @@ export function createChatStream(callbacks: ChatStreamCallbacks) {
       const e = JSON.parse(event.data) as WsEvent;
       switch (e.type) {
         case "text_delta":
-          callbacks.onToken(e.delta!);
+          callbacks.onToken(e.delta);
           break;
         case "tool_start":
-          callbacks.onToolStart?.(e.name!, e.arguments || {});
+          callbacks.onToolStart?.(e.name, e.arguments || {});
           break;
         case "tool_end":
-          callbacks.onToolEnd?.(e.name!, e.ok ?? true, e.summary || "");
+          callbacks.onToolEnd?.(e.name, e.ok ?? true, e.summary || "");
           break;
         case "plan_card":
           if (e.card) callbacks.onPlanCard?.(e.card);
@@ -175,16 +151,31 @@ export function createChatStream(callbacks: ChatStreamCallbacks) {
 
 export const api = {
   getGoal: () => request<GoalTree | null>("/api/planner/goal"),
+  getPlanVersions: () => request<PlanVersionsResponse>("/api/planner/versions"),
+  restorePlanVersion: (goalId: string) =>
+    request<PlanRestoreResponse>(`/api/planner/versions/${encodeURIComponent(goalId)}/restore`, {
+      method: "POST",
+    }),
+  syncPlanDocument: () =>
+    request<PlanDocumentSyncResponse>("/api/planner/document/sync", {
+      method: "POST",
+    }),
   generatePlan: (payload: GeneratePlanRequest) =>
     request<GoalTree>("/api/planner/generate", {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  patchTask: (taskId: string, payload: { status?: TaskStatus; actual_minutes?: number; time_slot?: TimeSlot; sort_order?: number }) =>
+  patchTask: (taskId: string, payload: PatchTaskPayload) =>
     request<GoalTree>(`/api/planner/task/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  saveTaskFeedback: (taskId: string, payload: TaskFeedbackPayload) =>
+    request<TaskFeedbackResponse>(`/api/planner/task/${taskId}/feedback`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
+  deleteTask: (taskId: string) => request<GoalTree>(`/api/planner/task/${taskId}`, { method: "DELETE" }),
   createTask: (payload: TaskCreateRequest) =>
     request<GoalTree>("/api/planner/task", {
       method: "POST",
@@ -196,11 +187,11 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getWorkspaceTree: (dir = "") =>
-    request<{ tree: FileNode[]; workspace_path: string }>(`/api/workspace/tree?dir=${encodeURIComponent(dir)}`),
+    request<WorkspaceTreeResponse>(`/api/workspace/tree?dir=${encodeURIComponent(dir)}`),
   getWorkspaceFile: (filePath: string) =>
-    request<{ content: string; mime: string; truncated: boolean }>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`),
+    request<WorkspaceFileResponse>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`),
   createWorkspaceFile: (filePath: string, content: string) =>
-    request<{ ok: boolean; tree: FileNode[] }>("/api/workspace/file", {
+    request<WorkspaceFileMutationResponse>("/api/workspace/file", {
       method: "POST",
       body: JSON.stringify({ path: filePath, content }),
     }),
@@ -216,23 +207,59 @@ export const api = {
         const text = await res.text();
         throw new Error(text || `Upload failed: ${res.status}`);
       }
-      return res.json() as Promise<{ file: FileNode; tree: FileNode[]; workspace_path: string }>;
+      return res.json() as Promise<WorkspaceUploadResponse>;
     });
   },
   deleteWorkspaceFile: (filePath: string) =>
-    request<{ ok: boolean; tree: FileNode[] }>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`, {
+    request<WorkspaceFileMutationResponse>(`/api/workspace/file?path=${encodeURIComponent(filePath)}`, {
       method: "DELETE",
     }),
   renameWorkspaceFile: (oldPath: string, newPath: string) =>
-    request<{ ok: boolean; tree: FileNode[] }>("/api/workspace/file", {
+    request<WorkspaceFileMutationResponse>("/api/workspace/file", {
       method: "PATCH",
       body: JSON.stringify({ old_path: oldPath, new_path: newPath }),
     }),
   getWorkspaceInfo: () =>
-    request<{ workspace_path: string }>("/api/workspace/info"),
+    request<WorkspaceInfoResponse>("/api/workspace/info"),
+  createLearningArtifact: (payload: LearningArtifactPayload) =>
+    request<LearningArtifactResponse>("/api/feedback/artifacts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  generateErrorCandidate: (payload: ErrorCandidateGeneratePayload) =>
+    request<ErrorCandidateResponse>("/api/feedback/candidates/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getErrorCandidates: (status?: "pending" | "confirmed" | "dismissed") =>
+    request<ErrorCandidatesResponse>(`/api/feedback/candidates${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  updateErrorCandidate: (candidateId: string, payload: ErrorCandidatePatchPayload) =>
+    request<ErrorCandidateResponse>(`/api/feedback/candidates/${encodeURIComponent(candidateId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  getDailyFeedback: (date: string) =>
+    request<DailyFeedbackResponse>(`/api/feedback/daily?date=${encodeURIComponent(date)}`),
+  getWeeklyReview: (weekStart: string) =>
+    request<WeeklyReviewResponse>(`/api/feedback/weekly?week_start=${encodeURIComponent(weekStart)}`),
+  createWeeklyReview: (payload: WeeklyReviewPayload) =>
+    request<WeeklyReviewResponse>("/api/feedback/weekly", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   adaptPlan: () => request<GoalTree>("/api/planner/adapt", { method: "POST" }),
-  getSessions: () => request<{ sessions: Array<{ session_id: string; message_count: number; last_message_at: string; preview: string }> }>("/api/sessions"),
-  getSessionMessages: (sessionId: string) => request<{ session_id: string; messages: Array<{ role: string; content: string; created_at: string }> }>(`/api/sessions/${sessionId}`),
+  getSessions: () => request<SessionsResponse>("/api/sessions"),
+  getSessionMessages: (sessionId: string) => request<SessionMessagesResponse>(`/api/sessions/${encodeURIComponent(sessionId)}`),
+  deleteSession: async (sessionId: string) => {
+    const encoded = encodeURIComponent(sessionId);
+    try {
+      return await request<DeleteSessionResponse>(`/api/sessions/${encoded}`, { method: "DELETE" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.includes("Cannot DELETE")) throw err;
+      return request<DeleteSessionResponse>(`/api/sessions/${encoded}/delete`, { method: "POST" });
+    }
+  },
   getSettings: () => request<LlmSettings>("/api/settings"),
   updateSettings: (payload: LlmSettingsUpdate) =>
     request<LlmSettings>("/api/settings", {

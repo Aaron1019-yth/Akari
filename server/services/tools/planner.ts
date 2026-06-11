@@ -14,15 +14,9 @@ import type {
   TaskPatchRequest,
   TrackRow,
 } from "../../types.js";
+import { addAppDays, parseAppDate, toAppDateString } from "../date-utils.js";
 
 // ── Helpers ──
-
-function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const d2 = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d2}`;
-}
 
 function formatTask(task: DailyTaskRow): string {
   const slot: Record<string, string> = {
@@ -59,9 +53,9 @@ function getPlannerContext(): ToolResult {
   const completed = tasks.filter((t) => t.status === "completed").length;
   const total = tasks.length;
 
-  const todayStr = toDateStr(new Date());
-  const examDate = new Date(goal.exam_date + "T00:00:00");
-  const todayDate = new Date(todayStr + "T00:00:00");
+  const todayStr = toAppDateString();
+  const examDate = parseAppDate(goal.exam_date);
+  const todayDate = parseAppDate(todayStr);
   const daysLeft = Math.max(0, Math.floor((examDate.getTime() - todayDate.getTime()) / 86400000));
 
   const weak: { name: string; correct_rate: number }[] = [];
@@ -92,7 +86,7 @@ function getPlannerContext(): ToolResult {
 }
 
 function getTodayTasks(dateParam?: string): ToolResult {
-  const day = dateParam || toDateStr(new Date());
+  const day = dateParam || toAppDateString();
   const tasks = getTasksForDate(day);
 
   if (tasks.length === 0) {
@@ -116,18 +110,17 @@ function getTodayTasks(dateParam?: string): ToolResult {
 }
 
 function getWeekTasks(weekStart: string): ToolResult {
-  const startDate = new Date(weekStart + "T00:00:00");
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 6);
-  const endStr = toDateStr(endDate);
+  const endStr = addAppDays(weekStart, 6);
 
   const tasks = db
     .prepare(
-      `SELECT * FROM daily_tasks
-       WHERE date >= ? AND date <= ?
-       ORDER BY date,
-         CASE time_slot WHEN 'morning' THEN 0 WHEN 'afternoon' THEN 1 WHEN 'evening' THEN 2 END,
-         sort_order`
+      `SELECT dt.* FROM daily_tasks dt
+       JOIN weekly_plans wp ON wp.id = dt.weekly_plan_id
+       JOIN goals g ON g.id = wp.goal_id
+       WHERE dt.date >= ? AND dt.date <= ? AND g.status = 'active'
+       ORDER BY dt.date,
+         CASE dt.time_slot WHEN 'morning' THEN 0 WHEN 'afternoon' THEN 1 WHEN 'evening' THEN 2 END,
+         dt.sort_order`
     )
     .all(weekStart, endStr) as DailyTaskRow[];
 

@@ -20,6 +20,21 @@ export type TaskStatus = z.infer<typeof TaskStatus>;
 export const UiTheme = z.enum(["agent_warm_paper", "akari_cool", "classic_beige"]);
 export type UiTheme = z.infer<typeof UiTheme>;
 
+export const TaskDifficulty = z.enum(["easy", "ok", "hard"]);
+export type TaskDifficulty = z.infer<typeof TaskDifficulty>;
+
+export const TaskFocus = z.enum(["focused", "normal", "distracted", "tired"]);
+export type TaskFocus = z.infer<typeof TaskFocus>;
+
+export const LearningArtifactSource = z.enum(["workspace_file", "chat", "manual"]);
+export type LearningArtifactSource = z.infer<typeof LearningArtifactSource>;
+
+export const ErrorCandidateStatus = z.enum(["pending", "confirmed", "dismissed"]);
+export type ErrorCandidateStatus = z.infer<typeof ErrorCandidateStatus>;
+
+export const StudyReviewScope = z.enum(["daily", "weekly"]);
+export type StudyReviewScope = z.infer<typeof StudyReviewScope>;
+
 // ── DB row interfaces (exact column shape from SQLite) ──
 
 export interface GoalRow {
@@ -120,6 +135,56 @@ export interface StudentProfileRow {
   last_updated: string;
 }
 
+export interface TaskFeedbackRow {
+  id: string;
+  daily_task_id: string;
+  actual_minutes: number;
+  difficulty: string;
+  focus: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningArtifactRow {
+  id: string;
+  source_type: string;
+  source_ref: string;
+  daily_task_id: string | null;
+  title: string;
+  raw_text: string;
+  metadata_json: string;
+  created_at: string;
+}
+
+export interface ErrorCandidateRow {
+  id: string;
+  artifact_id: string;
+  daily_task_id: string | null;
+  module_id: string | null;
+  subject: string;
+  question_summary: string;
+  mistake_summary: string;
+  cause: string;
+  suggested_fix: string;
+  confidence: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  confirmed_at: string | null;
+}
+
+export interface StudyReviewRow {
+  id: string;
+  scope: string;
+  period_start: string;
+  period_end: string;
+  summary: string;
+  stats_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Request schemas ──
 
 export const GeneratePlanRequest = z.object({
@@ -180,6 +245,54 @@ export const ErrorBatchRequest = z.object({
   errors: z.array(ErrorInput),
 });
 export type ErrorBatchRequest = z.infer<typeof ErrorBatchRequest>;
+
+export const TaskFeedbackRequest = z.object({
+  actual_minutes: z.number().int().min(0),
+  difficulty: TaskDifficulty,
+  focus: TaskFocus,
+  note: z.string().default(""),
+});
+export type TaskFeedbackRequest = z.infer<typeof TaskFeedbackRequest>;
+
+export const LearningArtifactRequest = z.object({
+  source_type: LearningArtifactSource,
+  source_ref: z.string().default(""),
+  daily_task_id: z.string().nullable().optional(),
+  title: z.string().default(""),
+  raw_text: z.string().default(""),
+  metadata: z.record(z.unknown()).default({}),
+});
+export type LearningArtifactRequest = z.infer<typeof LearningArtifactRequest>;
+
+export const ErrorCandidateGenerateRequest = z.object({
+  artifact_id: z.string().optional(),
+  daily_task_id: z.string().optional(),
+  text: z.string().optional(),
+  hint: z.string().default(""),
+}).refine((value) => Boolean(value.artifact_id || value.text), {
+  message: "artifact_id or text is required",
+});
+export type ErrorCandidateGenerateRequest = z.infer<typeof ErrorCandidateGenerateRequest>;
+
+export const ErrorCandidatePatchRequest = z.object({
+  status: ErrorCandidateStatus.optional(),
+  daily_task_id: z.string().nullable().optional(),
+  module_id: z.string().nullable().optional(),
+  subject: z.string().optional(),
+  question_summary: z.string().optional(),
+  mistake_summary: z.string().optional(),
+  cause: z.string().optional(),
+  suggested_fix: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+export type ErrorCandidatePatchRequest = z.infer<typeof ErrorCandidatePatchRequest>;
+
+export const WeeklyReviewRequest = z.object({
+  week_start: z.string(),
+  week_end: z.string(),
+  regenerate: z.boolean().default(false),
+});
+export type WeeklyReviewRequest = z.infer<typeof WeeklyReviewRequest>;
 
 export const ChatRequest = z.object({
   session_id: z.string().default("default"),
@@ -323,6 +436,76 @@ export const ErrorBatchResponse = z.object({
   profile: StudentProfileOut.nullable(),
 });
 export type ErrorBatchResponse = z.infer<typeof ErrorBatchResponse>;
+
+export const TaskFeedbackOut = z.object({
+  id: z.string(),
+  daily_task_id: z.string(),
+  actual_minutes: z.number().int(),
+  difficulty: TaskDifficulty,
+  focus: TaskFocus,
+  note: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type TaskFeedbackOut = z.infer<typeof TaskFeedbackOut>;
+
+export const LearningArtifactOut = z.object({
+  id: z.string(),
+  source_type: LearningArtifactSource,
+  source_ref: z.string(),
+  daily_task_id: z.string().nullable(),
+  title: z.string(),
+  raw_text: z.string(),
+  metadata: z.record(z.unknown()),
+  created_at: z.string(),
+});
+export type LearningArtifactOut = z.infer<typeof LearningArtifactOut>;
+
+export const ErrorCandidateOut = z.object({
+  id: z.string(),
+  artifact_id: z.string(),
+  daily_task_id: z.string().nullable(),
+  module_id: z.string().nullable(),
+  subject: z.string(),
+  question_summary: z.string(),
+  mistake_summary: z.string(),
+  cause: z.string(),
+  suggested_fix: z.string(),
+  confidence: z.number(),
+  status: ErrorCandidateStatus,
+  created_at: z.string(),
+  updated_at: z.string(),
+  confirmed_at: z.string().nullable(),
+});
+export type ErrorCandidateOut = z.infer<typeof ErrorCandidateOut>;
+
+export const StudyReviewOut = z.object({
+  id: z.string(),
+  scope: StudyReviewScope,
+  period_start: z.string(),
+  period_end: z.string(),
+  summary: z.string(),
+  stats: z.record(z.unknown()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type StudyReviewOut = z.infer<typeof StudyReviewOut>;
+
+export const PlanVersionSummaryOut = z.object({
+  goal_id: z.string(),
+  title: z.string(),
+  status: GoalStatus,
+  created_at: z.string(),
+  exam_date: z.string(),
+  week_start: z.string().nullable(),
+  week_end: z.string().nullable(),
+  task_count: z.number().int(),
+  completed_count: z.number().int(),
+  estimated_minutes: z.number().int(),
+  actual_minutes: z.number().int(),
+  document_path: z.string(),
+});
+export type PlanVersionSummaryOut = z.infer<typeof PlanVersionSummaryOut>;
 
 export const LlmSettingsOut = z.object({
   api_key_masked: z.string(),

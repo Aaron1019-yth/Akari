@@ -1,4 +1,5 @@
-import fs from "fs";
+import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { DATA_DIR } from "../db.js";
 
@@ -47,43 +48,47 @@ function summaryPath(sessionId: string): string {
 }
 
 /** Read all user/assistant messages from a JSONL session file.
- *  Skips blank lines and corrupt JSON lines (matching Python _read_messages). */
-function readMessages(sessionPath: string): SessionMessage[] {
+ *  Skips blank lines and corrupt JSON lines. */
+function parseMessages(text: string): SessionMessage[] {
   const messages: SessionMessage[] = [];
-  try {
-    const text = fs.readFileSync(sessionPath, "utf-8");
-    for (const line of text.split("\n")) {
-      if (!line.trim()) continue;
-      let item: unknown;
-      try {
-        item = JSON.parse(line);
-      } catch {
-        continue; // skip corrupt lines
-      }
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    let item: unknown;
+    try {
+      item = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (
+      item &&
+      typeof item === "object" &&
+      "role" in item &&
+      "content" in item
+    ) {
+      const obj = item as Record<string, unknown>;
       if (
-        item &&
-        typeof item === "object" &&
-        "role" in item &&
-        "content" in item
+        (obj.role === "user" || obj.role === "assistant") &&
+        typeof obj.content === "string" &&
+        obj.content.length > 0
       ) {
-        const obj = item as Record<string, unknown>;
-        if (
-          (obj.role === "user" || obj.role === "assistant") &&
-          typeof obj.content === "string" &&
-          obj.content.length > 0
-        ) {
-          messages.push({
-            role: obj.role as string,
-            content: obj.content as string,
-            created_at: (obj.created_at as string) || "",
-          });
-        }
+        messages.push({
+          role: obj.role as string,
+          content: obj.content as string,
+          created_at: (obj.created_at as string) || "",
+        });
       }
     }
-  } catch {
-    return []; // file doesn't exist or is unreadable
   }
   return messages;
+}
+
+function readMessagesSync(filePath: string): SessionMessage[] {
+  try {
+    const text = fsSync.readFileSync(filePath, "utf-8");
+    return parseMessages(text);
+  } catch {
+    return [];
+  }
 }
 
 // ── Public API ──
@@ -95,14 +100,16 @@ export function appendMessage(
   createdAt?: string,
 ): void {
   if (!content.trim()) return;
-  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+  fsSync.mkdirSync(SESSIONS_DIR, { recursive: true });
   const file = sessionPath(sessionId);
   const payload = {
     role,
     content,
     created_at: createdAt || new Date().toISOString(),
   };
-  fs.appendFileSync(file, JSON.stringify(payload) + "\n", "utf-8");
+  // Synchronous append — a single JSONL line is tiny; async would require
+  // callers to await before reading, which breaks the current sync API contract.
+  fsSync.appendFileSync(file, JSON.stringify(payload) + "\n", "utf-8");
 }
 
 export function loadRecentMessages(
@@ -110,12 +117,11 @@ export function loadRecentMessages(
   maxMessages = 18,
   maxChars = 12000,
 ): Message[] {
-  const rows = readMessages(sessionPath(sessionId));
+  const rows = readMessagesSync(sessionPath(sessionId));
   if (rows.length === 0) return [];
 
   const selected: SessionMessage[] = [];
   let total = 0;
-  // Take last maxMessages, iterate in reverse to accumulate from end
   const tail = rows.slice(-maxMessages);
   for (let i = tail.length - 1; i >= 0; i--) {
     const content = tail[i].content;
@@ -133,8 +139,8 @@ export function loadRecentMessages(
 export function loadSummary(sessionId: string): string | null {
   const p = summaryPath(sessionId);
   try {
-    if (fs.existsSync(p)) {
-      return fs.readFileSync(p, "utf-8");
+    if (fsSync.existsSync(p)) {
+      return fsSync.readFileSync(p, "utf-8");
     }
   } catch {
     // ignore read errors
@@ -143,27 +149,27 @@ export function loadSummary(sessionId: string): string | null {
 }
 
 export function saveSummary(sessionId: string, summary: string): void {
-  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-  fs.writeFileSync(summaryPath(sessionId), summary, "utf-8");
+  fsSync.mkdirSync(SESSIONS_DIR, { recursive: true });
+  fs.writeFile(summaryPath(sessionId), summary, "utf-8").catch(() => {});
 }
 
 export function listSessions(): SessionMeta[] {
-  if (!fs.existsSync(SESSIONS_DIR)) return [];
+  if (!fsSync.existsSync(SESSIONS_DIR)) return [];
 
-  const jsonlFiles = fs
+  const jsonlFiles = fsSync
     .readdirSync(SESSIONS_DIR)
     .filter((f) => f.endsWith(".jsonl"))
     .map((f) => ({
       name: f,
       path: path.join(SESSIONS_DIR, f),
-      mtime: fs.statSync(path.join(SESSIONS_DIR, f)).mtimeMs,
+      mtime: fsSync.statSync(path.join(SESSIONS_DIR, f)).mtimeMs,
     }))
     .sort((a, b) => b.mtime - a.mtime);
 
   const sessions: SessionMeta[] = [];
   for (const file of jsonlFiles) {
     const sid = path.basename(file.name, ".jsonl");
-    const messages = readMessages(file.path);
+    const messages = readMessagesSync(file.path);
     if (messages.length === 0) continue;
 
     const firstUser = messages.find((m) => m.role === "user");
@@ -180,5 +186,12 @@ export function listSessions(): SessionMeta[] {
 }
 
 export function getSessionMessages(sessionId: string): SessionMessage[] {
-  return readMessages(sessionPath(sessionId));
+  return readMessagesSync(sessionPath(sessionId));
+}
+
+export function deleteSession(sessionId: string): void {
+  const jsonl = sessionPath(sessionId);
+  const summary = summaryPath(sessionId);
+  try { if (fsSync.existsSync(jsonl)) fsSync.unlinkSync(jsonl); } catch { /* ok */ }
+  try { if (fsSync.existsSync(summary)) fsSync.unlinkSync(summary); } catch { /* ok */ }
 }

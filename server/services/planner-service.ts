@@ -18,6 +18,7 @@ import type {
   DailyTaskOut,
 } from "../types.js";
 import { serializeProfile } from "./profile-service.js";
+import { addAppDays, appWeekBounds, parseAppDate, toAppDateString } from "./date-utils.js";
 
 // ── Constants ──
 
@@ -29,27 +30,6 @@ const TRACKS = [
 
 function id(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
-
-// ── Date helpers ──
-
-function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const d2 = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d2}`;
-}
-
-function weekBounds(day: Date): { start: string; end: string } {
-  const start = new Date(day);
-  start.setDate(start.getDate() - start.getDay() + (start.getDay() === 0 ? -6 : 1)); // Monday
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return { start: toDateStr(start), end: toDateStr(end) };
-}
-
-function parseDate(str: string): Date {
-  return new Date(str + "T00:00:00");
 }
 
 // ── JSON helpers ──
@@ -123,8 +103,7 @@ export function getActiveGoal(): GoalRow | undefined {
 
 /** Assemble the full nested goal tree (tracks → modules → weekly plan → tasks → profile). */
 export function buildGoalTree(goal: GoalRow): GoalTree {
-  const today = new Date();
-  const { start, end } = weekBounds(today);
+  const { start, end } = appWeekBounds();
 
   // Tracks with nested modules
   const trackRows = queryTracks(goal.id);
@@ -203,7 +182,7 @@ export function buildPlanCard(): PlanCardPayload {
     };
   }
 
-  const today = toDateStr(new Date());
+  const today = toAppDateString();
   const tasks = plan.tasks;
   const completed = tasks.filter((t) => t.status === "completed").length;
   const todayTasks = tasks.filter((t) => t.date === today);
@@ -223,7 +202,7 @@ export function buildPlanCard(): PlanCardPayload {
 /** Generate a new plan: archive old active goal, create goal/tracks/modules/Week1/profile. */
 export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
   const now = new Date().toISOString(); // UTC datetime for created_at / last_updated
-  const todayStr = toDateStr(new Date());
+  const todayStr = toAppDateString();
 
   const goalRow = db.transaction(() => {
     // Archive any existing active goal
@@ -297,7 +276,7 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
     }
 
     // ── Week 1 plan ──
-    const { start: weekStart, end: weekEnd } = weekBounds(new Date());
+    const { start: weekStart, end: weekEnd } = appWeekBounds();
     const focus = payload.weaknesses.length > 0
       ? payload.weaknesses
       : ["资料分析", "言语理解与表达"];
@@ -332,8 +311,7 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
 
     for (let offset = 0; offset < 7; offset++) {
       const mod = planModules[offset % planModules.length];
-      const taskDate = parseDate(weekStart);
-      taskDate.setDate(taskDate.getDate() + offset);
+      const taskDate = addAppDays(weekStart, offset);
 
       db.prepare(
         `INSERT INTO daily_tasks
@@ -344,7 +322,7 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
         id("task"),
         weekId,
         mod.id,
-        toDateStr(taskDate),
+        taskDate,
         `${mod.name}专项训练`,
         "practice",
         mod.name,
@@ -392,11 +370,13 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
 /** Return all tasks for a given ISO date string (YYYY-MM-DD), sorted by time_slot then sort_order. */
 export function getTasksForDate(day: string): DailyTaskRow[] {
   return db.prepare(
-    `SELECT * FROM daily_tasks
-     WHERE date = ?
+    `SELECT dt.* FROM daily_tasks dt
+     JOIN weekly_plans wp ON wp.id = dt.weekly_plan_id
+     JOIN goals g ON g.id = wp.goal_id
+     WHERE dt.date = ? AND g.status = 'active'
      ORDER BY
-       CASE time_slot WHEN 'morning' THEN 0 WHEN 'afternoon' THEN 1 WHEN 'evening' THEN 2 END,
-       sort_order`
+       CASE dt.time_slot WHEN 'morning' THEN 0 WHEN 'afternoon' THEN 1 WHEN 'evening' THEN 2 END,
+       dt.sort_order`
   ).all(day) as DailyTaskRow[];
 }
 
@@ -442,9 +422,8 @@ export function deleteTask(taskId: string): void {
 
 /** Create a new task for the given goal, auto-creating a weekly plan if needed. */
 export function createTask(goal: GoalRow, payload: TaskCreateRequest): DailyTaskRow {
-  const taskDateStr = payload.date || toDateStr(new Date());
-  const taskDate = parseDate(taskDateStr);
-  const { start, end } = weekBounds(taskDate);
+  const taskDateStr = payload.date || toAppDateString();
+  const { start, end } = appWeekBounds(parseAppDate(taskDateStr));
 
   return db.transaction(() => {
     // Find or create weekly plan covering this task's date
@@ -517,9 +496,8 @@ export function createTask(goal: GoalRow, payload: TaskCreateRequest): DailyTask
 
 /** Create next week's plan (starting 7 days from today), focused on weak modules. */
 export function adaptNextWeek(goal: GoalRow): void {
-  const nextDate = new Date();
-  nextDate.setDate(nextDate.getDate() + 7);
-  const { start: nextStart, end: nextEnd } = weekBounds(nextDate);
+  const nextDate = parseAppDate(addAppDays(toAppDateString(), 7));
+  const { start: nextStart, end: nextEnd } = appWeekBounds(nextDate);
 
   db.transaction(() => {
     const allModules = db.prepare(
@@ -549,8 +527,7 @@ export function adaptNextWeek(goal: GoalRow): void {
     const slots = ["morning", "afternoon", "evening"];
     for (let offset = 0; offset < 7; offset++) {
       const mod = focusModules[offset % focusModules.length];
-      const taskDate = parseDate(nextStart);
-      taskDate.setDate(taskDate.getDate() + offset);
+      const taskDate = addAppDays(nextStart, offset);
 
       db.prepare(
         `INSERT INTO daily_tasks
@@ -561,7 +538,7 @@ export function adaptNextWeek(goal: GoalRow): void {
         id("task"),
         weekId,
         mod.id,
-        toDateStr(taskDate),
+        taskDate,
         `${mod.name}巩固训练`,
         "practice",
         mod.name,

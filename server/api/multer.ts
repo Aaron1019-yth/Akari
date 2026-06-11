@@ -1,4 +1,7 @@
 import multer from "multer";
 
 /** In-memory multer storage — files land on req.file.buffer */
-export const upload = multer({ storage: multer.memoryStorage() });
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});

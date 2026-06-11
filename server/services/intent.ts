@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { DATA_DIR } from "../db.js";
 import { getActiveGoal } from "./planner-service.js";
+import { safeSessionId } from "./chat-service.js";
 
 // ── Paths ──
 
@@ -19,17 +20,7 @@ export const Intent = {
 } as const;
 export type Intent = (typeof Intent)[keyof typeof Intent];
 
-// ── Constants (must match Python exactly) ──
-
-const REQUIRED_FIELDS = [
-  "exam_type",
-  "target_exam",
-  "daily_hours",
-  "current_level",
-  "weak_modules",
-  "student_status",
-  "target_score",
-];
+// ── Constants ──
 
 const QUESTIONS: Record<string, string> = {
   exam_type: "你想考国考、省考还是事业单位？",
@@ -77,16 +68,6 @@ export interface IntentDecision {
   question: string;
   missing_field: string | null;
   pending_fields: Record<string, unknown>;
-}
-
-// ── Session ID safety ──
-
-function safeSessionId(sessionId: string): string {
-  const cleaned = sessionId
-    .split("")
-    .filter((ch) => /[a-zA-Z0-9]/.test(ch) || ch === "-" || ch === "_")
-    .join("");
-  return cleaned || "default";
 }
 
 // ── Session state paths ──

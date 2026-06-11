@@ -114,5 +114,74 @@ export function initDatabase(): void {
       learning_style TEXT NOT NULL DEFAULT '',
       last_updated TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS task_feedback (
+      id TEXT PRIMARY KEY,
+      daily_task_id TEXT NOT NULL REFERENCES daily_tasks(id) ON DELETE CASCADE,
+      actual_minutes INTEGER NOT NULL DEFAULT 0,
+      difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'ok', 'hard')),
+      focus TEXT NOT NULL CHECK (focus IN ('focused', 'normal', 'distracted', 'tired')),
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_task_feedback_task
+      ON task_feedback(daily_task_id);
+
+    CREATE TABLE IF NOT EXISTS learning_artifacts (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL CHECK (source_type IN ('workspace_file', 'chat', 'manual')),
+      source_ref TEXT NOT NULL DEFAULT '',
+      daily_task_id TEXT REFERENCES daily_tasks(id) ON DELETE SET NULL,
+      title TEXT NOT NULL DEFAULT '',
+      raw_text TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_learning_artifacts_task
+      ON learning_artifacts(daily_task_id);
+
+    CREATE INDEX IF NOT EXISTS idx_learning_artifacts_source
+      ON learning_artifacts(source_type, source_ref);
+
+    CREATE TABLE IF NOT EXISTS error_candidates (
+      id TEXT PRIMARY KEY,
+      artifact_id TEXT NOT NULL REFERENCES learning_artifacts(id) ON DELETE CASCADE,
+      daily_task_id TEXT REFERENCES daily_tasks(id) ON DELETE SET NULL,
+      module_id TEXT REFERENCES modules(id) ON DELETE SET NULL,
+      subject TEXT NOT NULL DEFAULT '',
+      question_summary TEXT NOT NULL DEFAULT '',
+      mistake_summary TEXT NOT NULL DEFAULT '',
+      cause TEXT NOT NULL DEFAULT '',
+      suggested_fix TEXT NOT NULL DEFAULT '',
+      confidence REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'dismissed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      confirmed_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_error_candidates_status
+      ON error_candidates(status);
+
+    CREATE INDEX IF NOT EXISTS idx_error_candidates_task
+      ON error_candidates(daily_task_id);
+
+    CREATE INDEX IF NOT EXISTS idx_error_candidates_module
+      ON error_candidates(module_id);
+
+    CREATE TABLE IF NOT EXISTS study_reviews (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL CHECK (scope IN ('daily', 'weekly')),
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      stats_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(scope, period_start, period_end)
+    );
   `);
 }

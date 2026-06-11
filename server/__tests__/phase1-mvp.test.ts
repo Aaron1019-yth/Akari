@@ -165,6 +165,26 @@ describe("Chat history", () => {
 
     try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ok */ }
   });
+
+  it("deletes messages and diagnostic state", async () => {
+    const sessionId = "phase1_delete_session_test";
+    const p = sessionPath(sessionId);
+    clearSessionState(sessionId);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ok */ }
+
+    appendMessage(sessionId, "user", "我想备考国考，帮我做计划");
+    new IntentClassifier().classify("我想备考国考，帮我做计划", sessionId);
+
+    const resp = await request(app).delete(`/api/sessions/${sessionId}`);
+    expect(resp.status).toBe(200);
+    expect(loadRecentMessages(sessionId)).toEqual([]);
+
+    const decision = new IntentClassifier().classify("每天3小时", sessionId);
+    expect(decision.intent).toBe(Intent.CHAT);
+
+    clearSessionState(sessionId);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ok */ }
+  });
 });
 
 // ── Settings (HTTP test) ──

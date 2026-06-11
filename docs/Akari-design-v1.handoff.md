@@ -1,9 +1,12 @@
 # Akari Handoff
 
-Last updated: 2026-06-10
+Last updated: 2026-06-11
 
-> **当前路线图**：`docs/superpowers/specs/2026-06-10-phase1-mvp-design.md`（Phase 1–3 完整规格）。
-> **阶段状态**：Phase 1 对话式规划教练 MVP 已完成。Phase 1.5 功能收尾已完成（2026-06-10）。后端已从 Python/FastAPI 迁移到 Node.js/TypeScript（2026-06-10）。Phase 2 Workspace 文件系统已完成（2026-06-10）。Phase 3 UI 生产级打磨已完成（2026-06-11）。验收记录见 `docs/PHASE_COMPLETION_LOG.md`。
+> **当前路线图**：`docs/Akari-spec-v1.roadmap.md`（V1/V1.1/V1.2/V2/V3 版本路线图）。
+> **原始规格**：`docs/superpowers/specs/Akari-spec-v1.phase1_mvp.md`（功能规格参考）。
+> **阶段状态**：V1 MVP 已完成并冻结功能边界；下一阶段进入 V2「学习总结与反馈」。验收记录见 `docs/Akari-spec-v1.completion_log.md`。
+> **V2 设计草案**：`docs/Akari-design-v2.feedback.md`（任务完成反馈、错题材料摄取、LLM 候选归因、用户确认入库、每日/每周复盘）。
+> **V1 收尾状态**：前端 transport 类型整理已完成；当前不再继续拆 `App.tsx` / `Workbench.tsx` / CSS，除非出现阻塞性 bug。
 
 ## Project State
 
@@ -20,7 +23,7 @@ Akari is a clean-room exam preparation desktop app. The current MVP has:
 - General tools: `web_search`, `web_fetch`, `read_document`, `write_to_file`, `list_workspace_files`.
 - Plan generation tool: `generate_plan`.
 - Agent loop: LLM → tool_calls → execute tools → feed results → repeat (max 8 rounds).
-- Workspace: real filesystem at `~/Desktop/Akari-WorkSpace/` with FileTree + FilePreview in workbench, path sandbox, PDF/DOCX parsing.
+- Workspace: real filesystem at `~/Desktop/Akari-WorkSpace/` with FileTree + single-file FilePreview in workbench, path sandbox, PDF/DOCX/RTF/Markdown/TXT/CSV/JSON/YAML/XML/HTML/TEX parsing.
 - Phase 1 routing: IntentClassifier with session-scoped diagnostic state, deterministic diagnostic-to-plan generation, `plan_card` / `file_list` WebSocket events.
 - Settings UI: API key / Base URL / Model / Tavily / Serper / Brave configurable from sidebar, persisted to `.akari/config.json`.
 
@@ -49,11 +52,12 @@ npm install --legacy-peer-deps
 Web app:
 
 ```bash
-npm run dev:api
-npm run dev
+npm run dev:web
 ```
 
 Open `http://127.0.0.1:5173/`.
+
+You can still run `npm run dev:api` and `npm run dev` separately when debugging, but the unified script avoids stale dev processes.
 
 Desktop app:
 
@@ -66,6 +70,12 @@ Checks:
 ```bash
 npm run build
 npm run test:api
+```
+
+V1 demo checklist:
+
+```bash
+open docs/Akari-v1-demo-script.md
 ```
 
 ## Important Files
@@ -90,13 +100,17 @@ npm run test:api
   - `server/services/agent-context.ts`: `buildSystemPrompt()` — static identity prefix + current time.
   - `server/services/agent-loop.ts`: `AgentLoop` — streaming orchestration with abort support, max 8 rounds.
   - `server/services/intent.ts`: `IntentClassifier` — 7-field diagnostic state machine.
-  - `server/services/settings-service.ts`: settings persistence to `.akari/config.json`, in-memory cache, key masking.
+- `server/services/settings-service.ts`: settings persistence to `.akari/config.json`, in-memory cache, key masking.
 - `desktop/src/react/App.tsx`: main UI, chat, right workbench, resize handles, streaming messages, abort button.
 - `desktop/src/react/services/api.ts`: frontend API client + `createChatStream()` WebSocket client.
-- `desktop/src/react/components/FileTree.tsx`: recursive file tree with expand/collapse, context menu.
-- `desktop/src/react/components/FilePreview.tsx`: text/Markdown file preview.
+- `desktop/src/react/features/chat/`: chat panel and session sidebar.
+- `desktop/src/react/features/workbench/`: right workbench planning surface.
+- `desktop/src/react/features/workspace/FileTree.tsx`: recursive file tree with expand/collapse, context menu.
+- `desktop/src/react/features/workspace/FilePreview.tsx`: text/Markdown file preview.
+- `desktop/src/react/features/settings/`: settings modal.
+- `desktop/src/react/shared/ui/`: generic shell UI such as titlebar and error boundary.
 - `shared/exam-schema.ts`: TypeScript domain contract (shared types, including `FileNode`).
-- `server/__tests__/`: Vitest test suite (20 tests).
+- `server/__tests__/`: Vitest test suite (39 tests).
 
 ## Verified Flows
 
@@ -113,19 +127,19 @@ npm run test:api
 - Configure search provider keys via Settings UI.
 - Settings persist to `.akari/config.json` and survive restarts; env vars serve as defaults.
 - Phase 1 diagnostic flow: collect fields, generate plan, push plan_card, clear session_state.
-- Upload PDF/DOCX files to workspace and browse in FileTree.
-- File preview (text/markdown) in workspace tab.
+- Upload PDF/DOCX/RTF/Markdown/TXT/CSV/JSON/YAML/XML/HTML/TEX files to workspace and browse in FileTree.
+- Single-file preview in workspace tab; close the file tab to return to the file list.
 - File delete and rename via context menu in workspace.
 - Agent can read/write/list workspace files via tools.
 - Conversation history persists to `.akari/memory/sessions/*.jsonl` and is loaded into Agent turns.
 - Build frontend.
-- Run API smoke tests (20 passing).
+- Run API smoke tests (39 passing).
 
 ## Phase 3 — UI / UX 生产级打磨（2026-06-11）
 
-- 左侧边栏重构：移除 traffic lights，增加「助手活动」「任务计划」占位菜单项，增加 collapse/expand tab。
-- 中央聊天面板：移除顶部 status bar，空状态改为「Akari 随时都在」SVG 头像，composer hint 上移。
-- 右侧工作台（OH-WorkSpace）：「对话文件」+「工作台」合并为单一 Workspace tab，含「我的规划」「对话文件」「工作台」三个子 tab。
+- 左侧边栏重构：移除 traffic lights 和无功能占位入口，保留真实会话列表、设置入口和 collapse/expand tab。
+- 中央聊天面板：移除顶部 status bar，空状态改为「Akari 随时都在」SVG 头像，composer hint 上移，清理无功能按钮。
+- 右侧工作台：保留「我的规划」和「工作台」两个入口，工作台采用单文件阅读模式。
 - 文件阅读模式：打开文件时自动折叠左侧边栏，全宽预览；上传文件后自动预览。
 - 全局设计升级（redesign-skill 审计）：Geist Variable 字体、off-white 配色、阴影色调统一、hover/active/focus 状态、噪点纹理、border-radius 层级、语义化 HTML、scroll-behavior: smooth。
 
@@ -134,8 +148,80 @@ npm run test:api
 - No database migrations yet; tables are created with `CREATE TABLE IF NOT EXISTS`.
 - Electron packaging is not done.
 - No `steer` / `resume_stream` implementation yet in WebSocket handler (infrastructure ready, handlers are stubs).
-- Settings form is long; could use sections/tabs (deferred to Phase 4).
-- Mood / thinking / card event parsing not implemented (deferred to Phase 4).
+- Settings form is long; could use sections/tabs in a later polish pass.
+- Mood / thinking / card event parsing is not surfaced in the frontend yet.
+- Sidebar width persistence is not implemented.
+- Further frontend decomposition can continue later, but should not block V1.
+
+## Completed V1 Wrap-Up — Frontend Type Organization Step 1
+
+Source plan: `/Users/aaron/.claude/plans/expressive-wondering-trinket.md`.
+
+Status: implemented on 2026-06-11. Verification passed with `npm run build` and `npm run test:api` (39 tests).
+
+This was a V1 MVP wrap-up/refactor task, not V2 feature work. The first step was intentionally narrow: identify and relocate service-local TypeScript types without moving business logic or changing runtime behavior.
+
+### Scope
+
+- Keep `shared/exam-schema.ts` as the single source for backend/frontend serialized contracts.
+- Add `desktop/src/react/services/types.ts`.
+- Move service/API transport types out of `desktop/src/react/services/api.ts` into that file:
+  - `LlmSettings`
+  - `LlmSettingsUpdate`
+  - `WsEvent`
+  - `ChatStreamCallbacks`
+  - `ChatStreamClient`
+  - `PatchTaskPayload`
+- Optionally add named response types in `services/types.ts` to replace anonymous API response shapes:
+  - `SessionsResponse`
+  - `SessionMessagesResponse`
+  - `DeleteSessionResponse`
+  - `WorkspaceTreeResponse`
+  - `WorkspaceFileResponse`
+  - `WorkspaceFileMutationResponse`
+  - `WorkspaceUploadResponse`
+  - `WorkspaceInfoResponse`
+
+Implementation notes:
+
+- `WsEvent` is now a discriminated union, so `text_delta`, `tool_start`, and `tool_end` no longer require non-null assertions in `api.ts`.
+- `createChatStream()` now declares a `ChatStreamClient` return type.
+- Component props remain colocated in their component files.
+
+### Non-Scope / Guardrails
+
+- Do not move `shared/exam-schema.ts` domain/API contracts into React features.
+- Do not split `App.tsx`, `Workbench.tsx`, hooks, utils, CSS, or components as part of Step 1.
+- Do not create a full `features/` tree unless the user explicitly confirms a later step.
+- Do not move component props into a global shared type folder. Keep props interfaces in their current component files until those components are actually moved into feature folders.
+- Do not touch backend schema, database behavior, business logic, UI behavior, or dependencies.
+
+### Future Type Placement Direction
+
+When the user confirms later frontend restructuring steps, the intended destinations are:
+
+- `desktop/src/react/features/chat/types.ts`: chat panel/session sidebar UI types.
+- `desktop/src/react/features/workspace/types.ts`: file tree, file preview, workspace preview/upload UI-only types.
+- `desktop/src/react/features/workbench/types.ts`: workbench tabs, plan view mode, timer mode, task move targets, summary UI types.
+- `desktop/src/react/features/settings/types.ts`: settings modal props, settings tabs, masked secret metadata.
+- Avoid creating `desktop/src/react/shared/types/` unless a type is truly cross-feature and not a backend/frontend contract.
+
+### Verification For Step 1
+
+Already run after implementation:
+
+```bash
+npm run build
+npm run test:api
+```
+
+Manual smoke checks:
+
+- Frontend loads normally.
+- `createChatStream()` WebSocket usage is unchanged.
+- Settings save flow still works.
+- Session list APIs still render.
+- Workspace file tree and preview API calls still work.
 
 ## Electron Note
 
@@ -294,4 +380,4 @@ Event types: `text_delta`, `thinking_start/delta/end`, `tool_start/end`, `conten
 
 ## Clean-Room Boundary
 
-Do not copy Hana/Akari legacy UI, Electron shell, stores, theme files, assets, or backend code into this project. Current implementation is new code. Planner legacy assets are still not migrated; if migrating, update `ORIGINALITY.md` and `docs/superpowers/specs/ORIGINALITY.md` first.
+Do not copy Hana/Akari legacy UI, Electron shell, stores, theme files, assets, or backend code into this project. Current implementation is new code. Planner legacy assets are still not migrated; if migrating, update `Akari-spec-v1.originality.md` and `docs/superpowers/specs/Akari-spec-v1.originality.md` first.
