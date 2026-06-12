@@ -1,5 +1,7 @@
 # Akari V1 Demo Script
 
+> 历史演示脚本：当前验收入口是 `../../P0-manual-acceptance.md`，本文件仅作过程归档。
+
 Last updated: 2026-06-11
 
 This checklist is the canonical V1 MVP smoke/demo path. It keeps V1 focused on the shipped capability: conversational planning, task management, workspace document reading, and session persistence.

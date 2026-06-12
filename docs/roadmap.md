@@ -86,27 +86,35 @@
 
 ---
 
-## V2 — 学习总结与反馈
+## V2 — 学习总结与反馈 ✅ MVP 主闭环已完成
 
-**MVP 目标**：用户拥有一个可编辑、可导出、可复盘的计划工作台；Akari 从任务完成反馈、上传材料、错题 PDF 和日常问答中结构化学习证据，辅助滚动调整计划。
+**MVP 目标**：用户拥有一个可编辑、可导出、可复盘的计划工作台；Akari 从任务完成反馈、上传材料、错题原件/批注和日常问答中整理学习证据，帮助用户更快完成复盘。
 
-**新功能**：
+**当前状态**：核心功能已实现，下一步以 `docs/P0-manual-acceptance.md` 做完整手动验收和细节打磨。
+
+**已完成功能**：
 - 计划文档同步：当前 active plan 自动写入 workspace Markdown，作为用户可读计划文档
-- 计划版本管理：当前计划、历史计划、草稿计划可查看/恢复/导出
-- 用户手写计划：允许只创建目标、空周计划或手动每日任务，Agent 不强制生成完整计划
-- 任务完成反馈：用户标记任务完成时，在对应任务格记录实际用时、难度、专注状态和一句话感受
-- 错题材料摄取：用户可上传照片/文稿，或在聊天中提交「这题不会」「帮我分析错因」等材料
-- 粉笔错题 PDF 导入：用户导出错题集 PDF 后上传，Akari 提取为学习证据并生成候选错因归因
-- LLM 错因归因：Agent 从图片/文稿/问答上下文中提取题目、模块、错因、改进建议，并生成候选 ErrorRecord
-- 用户确认入库：AI 归因结果保存前必须由用户确认或编辑，避免普通问答污染错题库
-- 周总结生成：聚合任务完成率、实际学习时长、任务反馈、错题模块分布、高频错因 → LLM 生成建议文案
-- API：`PATCH /api/planner/task/:taskId/feedback`、`POST /api/feedback/artifacts`、`POST /api/feedback/candidates/generate`、`GET /api/feedback/candidates`、`PATCH /api/feedback/candidates/:candidateId`、`GET /api/feedback/daily`、`POST /api/feedback/weekly`、`GET /api/feedback/weekly`
+- 计划版本管理：当前计划、历史计划可查看、恢复、归档、删除；active 计划不可直接删除
+- 用户手写计划：无 active plan 时可手动创建目标、描述、目标分、考试日期和空周计划
+- 目标编辑：active goal 的 title / description 可在 UI 中直接修改
+- 当前周日期切换：日视图可切换本周任意一天，并在选中日期添加任务
+- 任务完成反馈：用户标记今日任务完成时记录实际用时、难度、专注状态和一句简短感想
+- 复盘素材：用户可粘贴错题原件/批注/反思生成候选素材；粉笔 PDF 走复盘分析报告，不做错题本替代
+- 粉笔 PDF 分析：从当前 workspace PDF 生成薄弱点、记忆清单、回粉笔重做清单和计划建议
+- 用户确认入库：手动候选素材保存前必须由用户确认或忽略，避免普通问答污染复盘库
+- 详细周复盘：生成 Markdown 周复盘，包含完成情况、素材总览、言语复盘数据表和下周动作，并用浮窗展示
+- Chat 打磨：assistant 支持 GFM 表格渲染；Agent 可输出选择题按钮交互；会话名缩短
+- Dev server 打磨：`npm run dev:web` 严格使用 `5173/8742`，端口占用时拒绝启动
+- API：`POST /api/planner/manual`、`PATCH /api/planner/goal`、`PATCH /api/planner/task/:taskId/feedback`、`POST /api/feedback/artifacts`、`POST /api/feedback/artifacts/analyze-pdf-review`、`POST /api/feedback/candidates/generate`、`GET /api/feedback/candidates`、`PATCH /api/feedback/candidates/:candidateId`、`GET /api/feedback/daily`、`POST /api/feedback/weekly`、`GET /api/feedback/weekly`
 
 **V2 不做**：
 - 无确认的全自动错题入库
 - 复杂 OCR 训练或自研视觉模型
 - 依赖粉笔私有 API 或爬取
 - 一次性生成并锁死多月每日任务
+- 跨周日历系统
+- 结构化周复盘 schema；当前详细复盘仍存 Markdown summary
+- 让 AI 自动替用户判断公考言语题的真实思考错误
 - 出题 Agent
 - 能力雷达图 / 趋势折线图
 - 申论批改

@@ -10,15 +10,23 @@ import type {
   ChatStreamClient,
   DailyFeedbackResponse,
   DeleteSessionResponse,
+  ErrorCandidateExtractPayload,
+  ErrorCandidateExtractResponse,
   ErrorCandidateGeneratePayload,
   ErrorCandidatePatchPayload,
   ErrorCandidateResponse,
+  PdfReviewAnalyzePayload,
+  PdfReviewAnalyzeResponse,
   ErrorCandidatesResponse,
   LearningArtifactPayload,
   LearningArtifactResponse,
   LlmSettings,
   LlmSettingsUpdate,
+  ManualPlanPayload,
+  GoalPatchPayload,
   PatchTaskPayload,
+  PlanArchiveResponse,
+  PlanDeleteResponse,
   PlanDocumentSyncResponse,
   PlanRestoreResponse,
   PlanVersionsResponse,
@@ -127,8 +135,8 @@ export function createChatStream(callbacks: ChatStreamCallbacks): ChatStreamClie
   connect();
 
   return {
-    send: (text: string, sessionId = "default") => {
-      const payload = JSON.stringify({ type: "prompt", text, session_id: sessionId });
+    send: (text: string, sessionId = "default", displayText?: string) => {
+      const payload = JSON.stringify({ type: "prompt", text, session_id: sessionId, display_text: displayText });
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(payload);
       } else if (ws.readyState === WebSocket.CONNECTING) {
@@ -156,6 +164,14 @@ export const api = {
     request<PlanRestoreResponse>(`/api/planner/versions/${encodeURIComponent(goalId)}/restore`, {
       method: "POST",
     }),
+  archivePlanVersion: (goalId: string) =>
+    request<PlanArchiveResponse>(`/api/planner/versions/${encodeURIComponent(goalId)}/archive`, {
+      method: "POST",
+    }),
+  deletePlanVersion: (goalId: string) =>
+    request<PlanDeleteResponse>(`/api/planner/versions/${encodeURIComponent(goalId)}`, {
+      method: "DELETE",
+    }),
   syncPlanDocument: () =>
     request<PlanDocumentSyncResponse>("/api/planner/document/sync", {
       method: "POST",
@@ -164,6 +180,16 @@ export const api = {
     request<GoalTree>("/api/planner/generate", {
       method: "POST",
       body: JSON.stringify(payload)
+    }),
+  createManualPlan: (payload: ManualPlanPayload) =>
+    request<GoalTree>("/api/planner/manual", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  patchGoal: (payload: GoalPatchPayload) =>
+    request<GoalTree>("/api/planner/goal", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     }),
   patchTask: (taskId: string, payload: PatchTaskPayload) =>
     request<GoalTree>(`/api/planner/task/${taskId}`, {
@@ -195,9 +221,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ path: filePath, content }),
     }),
-  uploadWorkspaceFile: (file: File, signal?: AbortSignal) => {
+  uploadWorkspaceFile: (file: File, signal?: AbortSignal, options?: { target?: "review" }) => {
     const form = new FormData();
     form.append("file", file);
+    if (options?.target) form.append("target", options.target);
     return fetch(apiBase() + "/api/workspace/upload", {
       method: "POST",
       body: form,
@@ -231,6 +258,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  extractErrorCandidates: (payload: ErrorCandidateExtractPayload) =>
+    request<ErrorCandidateExtractResponse>("/api/feedback/candidates/extract", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  analyzePdfReview: (payload: PdfReviewAnalyzePayload) =>
+    request<PdfReviewAnalyzeResponse>("/api/feedback/artifacts/analyze-pdf-review", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   getErrorCandidates: (status?: "pending" | "confirmed" | "dismissed") =>
     request<ErrorCandidatesResponse>(`/api/feedback/candidates${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   updateErrorCandidate: (candidateId: string, payload: ErrorCandidatePatchPayload) =>
@@ -240,6 +277,11 @@ export const api = {
     }),
   getDailyFeedback: (date: string) =>
     request<DailyFeedbackResponse>(`/api/feedback/daily?date=${encodeURIComponent(date)}`),
+  generateDailyReviewDocument: (date: string) =>
+    request<{ path: string }>("/api/feedback/daily/document", {
+      method: "POST",
+      body: JSON.stringify({ date }),
+    }),
   getWeeklyReview: (weekStart: string) =>
     request<WeeklyReviewResponse>(`/api/feedback/weekly?week_start=${encodeURIComponent(weekStart)}`),
   createWeeklyReview: (payload: WeeklyReviewPayload) =>

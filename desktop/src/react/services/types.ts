@@ -5,6 +5,7 @@ import type {
   GoalTree,
   LearningArtifact,
   LearningArtifactSource,
+  PdfReviewReport,
   PlanVersionSummary,
   PlanCardPayload,
   StudyReview,
@@ -70,7 +71,7 @@ export type ChatStreamCallbacks = {
 };
 
 export type ChatStreamClient = {
-  send: (text: string, sessionId?: string) => void;
+  send: (text: string, sessionId?: string, displayText?: string) => void;
   abort: () => void;
   close: () => void;
 };
@@ -84,7 +85,6 @@ export type PatchTaskPayload = {
   title?: string;
   type?: string;
   subject?: string;
-  estimated_minutes?: number;
 };
 
 export type TaskFeedbackPayload = {
@@ -99,6 +99,20 @@ export type TaskFeedbackResponse = {
   goal: GoalTree;
 };
 
+export type ManualPlanPayload = {
+  title: string;
+  description: string;
+  target_score: number;
+  exam_date: string;
+};
+
+export type GoalPatchPayload = {
+  title?: string;
+  description?: string;
+  target_score?: number;
+  exam_date?: string;
+};
+
 export type PlanVersionsResponse = {
   versions: PlanVersionSummary[];
 };
@@ -106,6 +120,19 @@ export type PlanVersionsResponse = {
 export type PlanRestoreResponse = {
   goal: GoalTree;
   document_path: string;
+};
+
+export type PlanArchiveResponse = {
+  goal: GoalTree | null;
+  versions: PlanVersionSummary[];
+  document_path: string;
+};
+
+export type PlanDeleteResponse = {
+  ok: boolean;
+  deleted_goal_id: string;
+  deleted_document_paths: string[];
+  versions: PlanVersionSummary[];
 };
 
 export type PlanDocumentSyncResponse = {
@@ -136,6 +163,28 @@ export type ErrorCandidateResponse = {
   candidate: ErrorCandidate;
 };
 
+export type ErrorCandidateExtractPayload = {
+  artifact_id: string;
+  daily_task_id?: string | null;
+  hint?: string;
+};
+
+export type ErrorCandidateExtractResponse = {
+  artifact: LearningArtifact;
+  candidates: ErrorCandidate[];
+};
+
+export type PdfReviewAnalyzePayload = {
+  artifact_id: string;
+  hint?: string;
+};
+
+export type PdfReviewAnalyzeResponse = {
+  artifact: LearningArtifact;
+  review: StudyReview;
+  report: PdfReviewReport;
+};
+
 export type ErrorCandidatesResponse = {
   candidates: ErrorCandidate[];
 };
@@ -145,6 +194,12 @@ export type ErrorCandidatePatchPayload = {
   daily_task_id?: string | null;
   module_id?: string | null;
   subject?: string;
+  question_type?: string;
+  review_kind?: string;
+  question_text?: string;
+  user_answer?: string;
+  correct_answer?: string;
+  choice_reason?: string;
   question_summary?: string;
   mistake_summary?: string;
   cause?: string;
@@ -163,6 +218,7 @@ export type DailyFeedbackResponse = {
     actual_minutes?: number;
     hard_count?: number;
     confirmed_error_count?: number;
+    pdf_review_count?: number;
     top_causes?: string[];
   };
   review: StudyReview | null;

@@ -11,6 +11,11 @@ const DEFAULT_WORKSPACE =
 const HIDDEN_PATTERNS = [/^\./, /^node_modules$/, /^\.git$/];
 const MAX_TEXT_SIZE = 500 * 1024;
 
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
+
 const TEXT_MIME_BY_EXT: Record<string, string> = {
   ".md": "text/markdown",
   ".markdown": "text/markdown",
@@ -145,6 +150,12 @@ export async function readFile(relPath: string): Promise<FileContent> {
 
   const ext = path.extname(absPath).toLowerCase();
 
+  const imageMime = IMAGE_MIME_BY_EXT[ext];
+  if (imageMime) {
+    const data = fs.readFileSync(absPath).toString("base64");
+    return { content: `data:${imageMime};base64,${data}`, mime: imageMime, truncated: false };
+  }
+
   if (ext === ".pdf") {
     const dataBuffer = fs.readFileSync(absPath);
     try {
@@ -218,20 +229,30 @@ export function renameFile(oldPath: string, newPath: string): void {
   fs.renameSync(absOld, absNew);
 }
 
-export function saveUpload(filename: string, buffer: Buffer): FileNode {
+export type UploadTarget = "review";
+
+export function saveUpload(filename: string, buffer: Buffer, target?: UploadTarget): FileNode {
   const wp = ensureWorkspace();
-  const safe = safeFilename(filename);
-  const absPath = path.join(wp, safe);
+  const safe = safeFilename(normalizeUploadFilename(filename));
+  const relPath = target === "review" ? path.join("review", safe) : safe;
+  const absPath = path.join(wp, relPath);
+  fs.mkdirSync(path.dirname(absPath), { recursive: true });
   fs.writeFileSync(absPath, buffer);
   const stat = fs.statSync(absPath);
   return {
     name: safe,
     type: "file",
-    path: safe,
+    path: relPath,
     size: stat.size,
     modified_at: mtimeStr(stat),
     children: null,
   };
+}
+
+function normalizeUploadFilename(name: string): string {
+  if (/[一-鿿]/.test(name)) return name;
+  const decoded = Buffer.from(name, "latin1").toString("utf8");
+  return /[一-鿿]/.test(decoded) ? decoded : name;
 }
 
 function safeFilename(name: string): string {

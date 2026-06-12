@@ -153,6 +153,12 @@ export function saveSummary(sessionId: string, summary: string): void {
   fs.writeFile(summaryPath(sessionId), summary, "utf-8").catch(() => {});
 }
 
+function formatSessionPreview(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim().replace(/^(请帮我|帮我|我想|麻烦你|请你)/, "").trim();
+  if (normalized.length <= 22) return normalized;
+  return `${normalized.slice(0, 22)}…`;
+}
+
 export function listSessions(): SessionMeta[] {
   if (!fsSync.existsSync(SESSIONS_DIR)) return [];
 
@@ -173,7 +179,7 @@ export function listSessions(): SessionMeta[] {
     if (messages.length === 0) continue;
 
     const firstUser = messages.find((m) => m.role === "user");
-    const preview = (firstUser ? firstUser.content : "").slice(0, 60);
+    const preview = formatSessionPreview(firstUser?.content ?? "");
 
     sessions.push({
       session_id: sid,

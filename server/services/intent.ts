@@ -17,6 +17,11 @@ export const Intent = {
   ADJUST: "adjust",
   QUERY_PLAN: "query_plan",
   CHAT: "chat",
+  FILE_CHAT: "file_chat",
+  FILE_SUMMARY: "file_summary",
+  FILE_EXTRACT: "file_extract",
+  REVIEW_RECORD: "review_record",
+  TASK_LINK_REVIEW: "task_link_review",
 } as const;
 export type Intent = (typeof Intent)[keyof typeof Intent];
 
@@ -50,6 +55,12 @@ const PLAN_KEYWORDS = [
 ];
 
 const GREETING_KEYWORDS = new Set(["你好", "您好", "hi", "hello", "嗨", "在吗"]);
+
+const FILE_CONTEXT_RE = /# 附件上下文\s+[\s\S]*工作区路径：/;
+const FILE_SUMMARY_KEYWORDS = ["总结", "概括", "归纳", "梳理", "讲一下", "看一下主要内容"];
+const FILE_EXTRACT_KEYWORDS = ["提取", "抽取", "整理成表", "转成表", "列出", "结构化", "导出"];
+const REVIEW_RECORD_KEYWORDS = ["用户选择：入复盘", "计入复盘", "加入复盘", "作为周复盘素材", "帮我分析错题并记录", "记录这次错题", "加入今天复盘", "写入复盘", "纳入复盘"];
+const TASK_LINK_REVIEW_KEYWORDS = ["关联今天任务", "关联今日任务", "关联任务", "关联到任务", "挂到任务"];
 
 const DIAGNOSTIC_FIELDS = [
   { key: "exam_type", question: "你想考国考、省考还是事业单位？", priority: 1 },
@@ -121,6 +132,24 @@ function hasActiveGoal(): boolean {
 
 function planningIntent(text: string): boolean {
   return PLAN_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+function hasFileContext(text: string): boolean {
+  return FILE_CONTEXT_RE.test(text);
+}
+
+function visibleFileText(text: string): string {
+  return text.split("# 附件上下文")[0] || "";
+}
+
+function fileIntent(text: string): Intent | null {
+  if (!hasFileContext(text)) return null;
+  const visibleText = visibleFileText(text);
+  if (TASK_LINK_REVIEW_KEYWORDS.some((keyword) => visibleText.includes(keyword))) return Intent.TASK_LINK_REVIEW;
+  if (REVIEW_RECORD_KEYWORDS.some((keyword) => visibleText.includes(keyword))) return Intent.REVIEW_RECORD;
+  if (FILE_EXTRACT_KEYWORDS.some((keyword) => visibleText.includes(keyword))) return Intent.FILE_EXTRACT;
+  if (FILE_SUMMARY_KEYWORDS.some((keyword) => visibleText.includes(keyword))) return Intent.FILE_SUMMARY;
+  return Intent.FILE_CHAT;
 }
 
 // ── Helper: looks like diagnostic answer ──
@@ -235,6 +264,17 @@ export class IntentClassifier {
     const extracted = extractFields(text);
     Object.assign(pending, extracted);
     const hasGoal = hasActiveGoal();
+    const fileRoute = fileIntent(text);
+
+    if (fileRoute) {
+      saveSessionState({ ...state, pending_fields: pending }, sessionId);
+      return {
+        intent: fileRoute,
+        question: "",
+        missing_field: null,
+        pending_fields: pending,
+      };
+    }
 
     if (hasGoal && ADJUST_KEYWORDS.some((keyword) => text.includes(keyword))) {
       saveSessionState({ ...state, pending_fields: pending }, sessionId);

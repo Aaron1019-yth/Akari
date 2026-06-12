@@ -88,6 +88,95 @@ describe("V2 feedback API", () => {
     expect(confirmResp.body.candidate.confirmed_at).toBeTruthy();
   });
 
+  it("analyzes PDF-style text into a review report and confirmed diagnostics", async () => {
+    const { task } = await createPlan();
+    const artifactResp = await request(app)
+      .post("/api/feedback/artifacts")
+      .send({
+        source_type: "workspace_file",
+        source_ref: "fenbi.pdf",
+        daily_task_id: task.id,
+        title: "粉笔错题 PDF",
+        raw_text: "1. 根据材料，下列说法正确的是哪一项？\nA. 甲\nB. 乙\n2. 资料分析比重变化题，以下判断正确的是？\nA. 上升\nB. 下降",
+        metadata: { origin: "test" },
+      })
+      .expect(200);
+
+    const reportResp = await request(app)
+      .post("/api/feedback/artifacts/analyze-pdf-review")
+      .send({ artifact_id: artifactResp.body.artifact.id })
+      .expect(200);
+
+    expect(reportResp.body.artifact.id).toBe(artifactResp.body.artifact.id);
+    expect(reportResp.body.review.scope).toBe("daily");
+    expect(reportResp.body.review.summary).toContain("# 粉笔错题 PDF 复盘分析");
+    expect(reportResp.body.review.stats.pdf_review_report).toBeTruthy();
+    expect(reportResp.body.review.stats.pdf_review_count).toBeGreaterThanOrEqual(1);
+    expect(reportResp.body.report.overview).toBeTruthy();
+    expect(reportResp.body.report.weak_points.length).toBeGreaterThanOrEqual(1);
+    expect(reportResp.body.report.fenbi_redo_actions.length).toBeGreaterThanOrEqual(1);
+    expect(reportResp.body.report.source_warnings.length).toBeGreaterThanOrEqual(1);
+
+    const confirmedResp = await request(app).get("/api/feedback/candidates?status=confirmed").expect(200);
+    const pdfDiagnostics = confirmedResp.body.candidates.filter(
+      (item: { artifact_id: string; question_type: string; daily_task_id: string }) => item.artifact_id === artifactResp.body.artifact.id && item.question_type === "PDF诊断"
+    );
+    expect(pdfDiagnostics.length).toBeGreaterThanOrEqual(1);
+    expect(pdfDiagnostics[0].daily_task_id).toBe(task.id);
+
+    await request(app)
+      .post("/api/feedback/artifacts/analyze-pdf-review")
+      .send({ artifact_id: artifactResp.body.artifact.id })
+      .expect(200);
+    const confirmedAgainResp = await request(app).get("/api/feedback/candidates?status=confirmed").expect(200);
+    const pdfDiagnosticsAgain = confirmedAgainResp.body.candidates.filter(
+      (item: { artifact_id: string; question_type: string }) => item.artifact_id === artifactResp.body.artifact.id && item.question_type === "PDF诊断"
+    );
+    expect(pdfDiagnosticsAgain.length).toBe(pdfDiagnostics.length);
+  });
+
+  it("aggregates unlinked PDF diagnostics into daily and weekly review", async () => {
+    const { task } = await createPlan();
+    const artifactResp = await request(app)
+      .post("/api/feedback/artifacts")
+      .send({
+        source_type: "workspace_file",
+        source_ref: "unlinked-fenbi.pdf",
+        daily_task_id: null,
+        title: "未关联粉笔错题 PDF",
+        raw_text: "粉笔错题 PDF：言语逻辑填空成语辨析错误，资料分析增长率计算慢，需要回粉笔重做。",
+        metadata: { origin: "test" },
+      })
+      .expect(200);
+
+    await request(app)
+      .post("/api/feedback/artifacts/analyze-pdf-review")
+      .send({ artifact_id: artifactResp.body.artifact.id })
+      .expect(200);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyResp = await request(app).get(`/api/feedback/daily?date=${today}`).expect(200);
+    expect(dailyResp.body.stats.confirmed_error_count).toBeGreaterThanOrEqual(1);
+    expect(dailyResp.body.stats.pdf_review_count).toBeGreaterThanOrEqual(1);
+    expect(
+      dailyResp.body.confirmed_errors.some(
+        (item: { artifact_id: string; daily_task_id: string | null }) => item.artifact_id === artifactResp.body.artifact.id && item.daily_task_id === null
+      )
+    ).toBe(true);
+
+    const weeklyResp = await request(app)
+      .post("/api/feedback/weekly")
+      .send({
+        week_start: "2026-01-01",
+        week_end: "2026-12-31",
+        regenerate: true,
+      })
+      .expect(200);
+    expect(weeklyResp.body.review.stats.confirmed_error_count).toBeGreaterThanOrEqual(1);
+    expect(weeklyResp.body.review.stats.pdf_review_count).toBeGreaterThanOrEqual(1);
+    expect(weeklyResp.body.review.summary).toContain("已纳入 PDF 诊断");
+  });
+
   it("dismisses candidates", async () => {
     const { task } = await createPlan();
     const candidateResp = await request(app)
@@ -147,6 +236,9 @@ describe("V2 feedback API", () => {
     expect(weeklyResp.status).toBe(200);
     expect(weeklyResp.body.review.scope).toBe("weekly");
     expect(weeklyResp.body.review.stats.actual_minutes).toBeGreaterThanOrEqual(50);
+    expect(weeklyResp.body.review.summary).toContain("# 本周复盘");
+    expect(weeklyResp.body.review.summary).toContain("## 3. 言语复盘数据整理");
+    expect(weeklyResp.body.review.summary).toContain("| 错题 |");
 
     const getWeeklyResp = await request(app).get(`/api/feedback/weekly?week_start=${task.date}`);
     expect(getWeeklyResp.status).toBe(200);

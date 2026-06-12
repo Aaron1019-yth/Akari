@@ -33,12 +33,13 @@ export const taskFocusOptions: Array<{ label: string; value: TaskFocus }> = [
   { label: "专注", value: "focused" },
   { label: "正常", value: "normal" },
   { label: "分心", value: "distracted" },
-  { label: "疲惫", value: "tired" },
 ];
 
 export const supportedUploadExtensions = [
   ".pdf",
   ".docx",
+  ".jpg",
+  ".jpeg",
   ".md",
   ".markdown",
   ".txt",

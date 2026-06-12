@@ -1,5 +1,7 @@
 # 考公Agent 技术设计文档
 
+> 过程归档：本文件可能包含旧技术栈或旧架构设想，当前事实以 `../../README.md` 指向的根目录文档和代码为准。
+
 目标是构建一个由 Aaron 完整持有版权的考公备考 Agent。现有 Akari/Hana 项目只作为体验参考和资产来源审计对象；新项目不 Fork、不搬运 Akari/Hana 的通用 UI、Electron 壳、状态管理、主题系统或后端代码。仅迁移经确认由 Aaron 原创的 planner 相关代码与产品逻辑，其余部分采用 clean-room 方式重新实现。
 
 ---
@@ -53,7 +55,7 @@ Electron Main Process
 | 视觉表达 | 重新设计 | 不复制原项目组件结构、CSS、图片、图标封装、动效、文案 |
 | 第三方依赖 | 正常使用 | React、Electron、FastAPI、LangGraph 等按各自许可证合规使用 |
 
-新仓库应新增 `Akari-spec-v1.originality.md`，记录迁移文件、原创依据、重写范围和禁止搬运清单。
+新仓库应新增 `V1-originality.md`，记录迁移文件、原创依据、重写范围和禁止搬运清单。
 
 ### 1.4 目录结构
 
@@ -118,7 +120,7 @@ Electron Main Process
 ├── package.json                      [新增] Electron/React 构建配置
 ├── requirements.txt                  [新增] Python 依赖
 ├── pyproject.toml                    [新增] Python 项目配置
-├── Akari-spec-v1.originality.md                    [新增] 原创性与迁移审计记录
+├── V1-originality.md                    [新增] 原创性与迁移审计记录
 ├── CLAUDE.md                         [新增] 项目指引
 └── LICENSE                           Aaron 自选许可证
 ```
@@ -147,7 +149,7 @@ Electron Main Process
 
 ## 2. 数据模型
 
-数据模型、状态流转、数据库表结构和 MVP API 契约以 [`Akari-api-v1.domain_model.md`](./Akari-api-v1.domain_model.md) 为唯一编码合同。本节只保留核心摘要，避免总体设计和实现契约出现双源漂移。
+数据模型、状态流转、数据库表结构和 MVP API 契约以 [`V1-domain-model.md`](./V1-domain-model.md) 为唯一编码合同。本节只保留核心摘要，避免总体设计和实现契约出现双源漂移。
 
 ### 2.1 核心关系
 
@@ -408,7 +410,7 @@ App
 
 | 周 | 任务 | 产出 |
 |----|------|------|
-| 1 | 建新仓库，完成 `Akari-spec-v1.originality.md` 和迁移审计 | 干净的原创版权边界 |
+| 1 | 建新仓库，完成 `V1-originality.md` 和迁移审计 | 干净的原创版权边界 |
 | 1 | 重写 Electron + React + Vite 最小壳 | 三栏空布局可运行 |
 | 1 | 搭建 Python FastAPI 骨架，配 SQLite + SQLAlchemy | `backend/` 可运行 |
 | 2 | 实现 7 张数据表的 ORM 模型 + CRUD API | 数据层完成 |
@@ -480,7 +482,7 @@ Electron 42.3.0
 
 | 资产 | 处理方式 | 版权边界 |
 |------|----------|----------|
-| 计划任务栏 UI | 迁移+改造 | Aaron 原创；迁移前在 `Akari-spec-v1.originality.md` 记录文件清单 |
+| 计划任务栏 UI | 迁移+改造 | Aaron 原创；迁移前在 `V1-originality.md` 记录文件清单 |
 | 任务卡片交互 | 迁移+改造 | Aaron 原创部分保留，适配考公字段 |
 | 番茄钟 | 待审计 | 确认为 Aaron 原创才迁移，否则重写 |
 | 计划 schema | 迁移+演进 | Aaron 原创，改为 exam schema |

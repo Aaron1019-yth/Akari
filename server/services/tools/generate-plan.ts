@@ -48,7 +48,6 @@ const GeneratedTaskSchema = z.object({
   title: z.string().min(1).max(40),
   type: z.enum(["study", "practice", "review", "mock_exam", "essay"]),
   subject: z.string().min(1),
-  estimated_minutes: z.number().int().min(1).max(360),
   time_slot: z.enum(["morning", "afternoon", "evening"]),
   date: z.string(),
   module_id: z.string().nullable().optional(),
@@ -225,8 +224,8 @@ function generatePlan(weekStart: string, tasks: Record<string, unknown>[]): Tool
         db.prepare(
           `INSERT INTO daily_tasks
              (id, weekly_plan_id, module_id, date, title, type, subject,
-              question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              question_count, actual_minutes, time_slot, status, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           taskId,
           weekId,
@@ -236,7 +235,6 @@ function generatePlan(weekStart: string, tasks: Record<string, unknown>[]): Tool
           task.type,
           task.subject,
           questionCount,
-          task.estimated_minutes,
           0,
           task.time_slot,
           "pending",
@@ -278,17 +276,13 @@ function tasksFromDiagnostic(
   const dailyHours = Number(fields.daily_hours || 2);
 
   let slots: string[];
-  let minutes: number;
 
   if (dailyHours < 2) {
     slots = ["evening"];
-    minutes = 30;
   } else if (dailyHours < 4) {
     slots = ["afternoon", "evening"];
-    minutes = 45;
   } else {
     slots = ["morning", "afternoon", "evening"];
-    minutes = 60;
   }
 
   const tasks: Record<string, unknown>[] = [];
@@ -305,7 +299,6 @@ function tasksFromDiagnostic(
       title: `${primary}专项训练`,
       type: "practice",
       subject: primary,
-      estimated_minutes: minutes,
       time_slot: slots[0],
       date: dayStr,
     });
@@ -318,7 +311,6 @@ function tasksFromDiagnostic(
         title: `${reviewSubject}错题复盘`,
         type: "review",
         subject: reviewSubject,
-        estimated_minutes: Math.max(20, minutes - 15),
         time_slot: slots[1],
         date: dayStr,
       });
@@ -330,7 +322,6 @@ function tasksFromDiagnostic(
         title: "申论素材积累",
         type: "study",
         subject: "申论作文",
-        estimated_minutes: 30,
         time_slot: slots[2],
         date: dayStr,
       });
@@ -373,7 +364,6 @@ export function createGeneratePlanTool(): ToolDef {
                 enum: ["study", "practice", "review", "mock_exam", "essay"],
               },
               subject: { type: "string" },
-              estimated_minutes: { type: "integer" },
               time_slot: {
                 type: "string",
                 enum: ["morning", "afternoon", "evening"],
@@ -388,7 +378,6 @@ export function createGeneratePlanTool(): ToolDef {
               "title",
               "type",
               "subject",
-              "estimated_minutes",
               "time_slot",
               "date",
             ],

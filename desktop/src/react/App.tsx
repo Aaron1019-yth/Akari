@@ -8,8 +8,8 @@ import { Titlebar } from "./shared/ui/Titlebar";
 
 import { api, createChatStream } from "./services/api";
 import type { ChatMessage, DailyTask, ErrorCandidate, FileNode, GoalTree, PlanVersionSummary, TaskDifficulty, TaskFocus, TaskStatus, TaskType, TimeSlot, UiTheme } from "../../../shared/exam-schema";
-import type { DailyFeedbackResponse, WeeklyReviewResponse } from "./services/types";
-import { addDays, formatAppDate, getFileExtension, getPathName, nextExamDate, shortDate, supportedUploadExtensions, taskTypeOptions, toolLabel, weekDayLabels } from "./utils";
+import type { DailyFeedbackResponse } from "./services/types";
+import { addDays, formatAppDate, getFileExtension, nextExamDate, shortDate, supportedUploadExtensions, taskTypeOptions, toolLabel, weekDayLabels } from "./utils";
 
 const PANEL_WIDTHS = {
   leftDefault: 232,
@@ -33,10 +33,21 @@ export function App() {
   const [streamRef, setStreamRef] = useState<ReturnType<typeof createChatStream> | null>(null);
   const [currentToolLabel, setCurrentToolLabel] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"today" | "week">("today");
+  const [selectedPlanDate, setSelectedPlanDate] = useState(formatAppDate(new Date()));
+  const [manualPlanTitle, setManualPlanTitle] = useState("公考备考计划");
+  const [manualPlanDescription, setManualPlanDescription] = useState("手动维护每日任务与复盘素材。");
+  const [manualPlanTargetScore, setManualPlanTargetScore] = useState(150);
+  const [manualPlanExamDate, setManualPlanExamDate] = useState(nextExamDate());
+  const [manualPlanSaving, setManualPlanSaving] = useState(false);
+  const [manualPlanError, setManualPlanError] = useState<string | null>(null);
+  const [goalEditing, setGoalEditing] = useState(false);
+  const [goalDraftTitle, setGoalDraftTitle] = useState("");
+  const [goalDraftDescription, setGoalDraftDescription] = useState("");
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalEditError, setGoalEditError] = useState<string | null>(null);
   const [draftSlot, setDraftSlot] = useState<TimeSlot | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftType, setDraftType] = useState<TaskType>("study");
-  const [draftMinutes, setDraftMinutes] = useState(60);
   const [timerTask, setTimerTask] = useState<DailyTask | null>(null);
   const [timerMode, setTimerMode] = useState<"countdown" | "countup">("countdown");
   const [timerMinutes, setTimerMinutes] = useState(25);
@@ -68,6 +79,8 @@ export function App() {
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewMime, setPreviewMime] = useState("text/plain");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null);
+  const [pendingAttachmentForReview, setPendingAttachmentForReview] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ session_id: string; message_count: number; last_message_at: string; preview: string }>>([]);
@@ -76,15 +89,13 @@ export function App() {
   const [planVersionsLoading, setPlanVersionsLoading] = useState(false);
   const [planVersionsError, setPlanVersionsError] = useState<string | null>(null);
   const [restoringPlanId, setRestoringPlanId] = useState<string | null>(null);
+  const [archivingPlanId, setArchivingPlanId] = useState<string | null>(null);
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [errorCandidates, setErrorCandidates] = useState<ErrorCandidate[]>([]);
-  const [wrongQuestionText, setWrongQuestionText] = useState("");
-  const [candidateLoading, setCandidateLoading] = useState(false);
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [updatingCandidateId, setUpdatingCandidateId] = useState<string | null>(null);
-  const [dailyFeedback, setDailyFeedback] = useState<DailyFeedbackResponse | null>(null);
-  const [weeklyReview, setWeeklyReview] = useState<WeeklyReviewResponse["review"]>(null);
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [, setDailyFeedback] = useState<DailyFeedbackResponse | null>(null);
+  const [, setReviewError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const conversationRef = useRef<HTMLElement | null>(null);
@@ -161,23 +172,17 @@ export function App() {
     window.addEventListener("mouseup", onUp);
   }
 
-  const todayTasks = useMemo(() => {
-    const today = formatAppDate(new Date());
-    return goal?.weekly_plan?.tasks.filter((task) => task.date === today) ?? [];
-  }, [goal]);
-
-  const dailyVisibleTasks = useMemo(() => {
-    if (!goal?.weekly_plan) return [];
-    return todayTasks.length ? todayTasks : goal.weekly_plan.tasks.slice(0, 6);
-  }, [goal, todayTasks]);
+  const selectedDateTasks = useMemo(() => {
+    return goal?.weekly_plan?.tasks.filter((task) => task.date === selectedPlanDate) ?? [];
+  }, [goal, selectedPlanDate]);
 
   const groupedTasks = useMemo(() => {
     return {
-      morning: dailyVisibleTasks.filter((task) => task.time_slot === "morning"),
-      afternoon: dailyVisibleTasks.filter((task) => task.time_slot === "afternoon"),
-      evening: dailyVisibleTasks.filter((task) => task.time_slot === "evening")
+      morning: selectedDateTasks.filter((task) => task.time_slot === "morning"),
+      afternoon: selectedDateTasks.filter((task) => task.time_slot === "afternoon"),
+      evening: selectedDateTasks.filter((task) => task.time_slot === "evening")
     } satisfies Record<TimeSlot, DailyTask[]>;
-  }, [dailyVisibleTasks]);
+  }, [selectedDateTasks]);
 
   const weekDays = useMemo(() => {
     const weekStart = goal?.weekly_plan?.week_start ?? formatAppDate(new Date());
@@ -193,7 +198,7 @@ export function App() {
     return {
       completedCount: completed.length,
       totalCount: tasks.length,
-      completedMinutes: completed.reduce((total, task) => total + (task.actual_minutes || task.estimated_minutes), 0),
+      completedMinutes: completed.reduce((total, task) => total + (task.actual_minutes || 0), 0),
       range: goal?.weekly_plan ? `${shortDate(goal.weekly_plan.week_start)} - ${shortDate(goal.weekly_plan.week_end)}` : ""
     };
   }, [goal]);
@@ -226,9 +231,9 @@ export function App() {
   }, [goal]);
 
   const todaySummary = useMemo(() => {
-    const completed = todayTasks.filter((task) => task.status === "completed").length;
-    return { completed, total: todayTasks.length };
-  }, [todayTasks]);
+    const completed = selectedDateTasks.filter((task) => task.status === "completed").length;
+    return { completed, total: selectedDateTasks.length };
+  }, [selectedDateTasks]);
 
   const timerTargetSeconds = Math.max(1, timerMinutes) * 60;
   const timerDisplaySeconds = timerMode === "countdown" ? Math.max(0, timerTargetSeconds - timerElapsedSeconds) : timerElapsedSeconds;
@@ -254,7 +259,7 @@ export function App() {
     void refreshStudyReview();
   }
 
-  async function editTask(task: DailyTask, patch: { title?: string; type?: TaskType; estimated_minutes?: number }) {
+  async function editTask(task: DailyTask, patch: { title?: string; type?: TaskType }) {
     const updated = await api.patchTask(task.id, {
       ...patch,
       subject: patch.type ? (taskTypeOptions.find((item) => item.value === patch.type)?.label ?? task.subject) : undefined,
@@ -329,9 +334,8 @@ export function App() {
       title: draftTitle.trim(),
       type: draftType,
       subject: taskTypeOptions.find((item) => item.value === draftType)?.label ?? "综合",
-      estimated_minutes: draftMinutes,
       time_slot: slot,
-      date: formatAppDate(new Date())
+      date: selectedPlanDate
     });
     setGoal(updated);
     void refreshPlanVersions();
@@ -339,7 +343,6 @@ export function App() {
     setDraftSlot(null);
     setDraftTitle("");
     setDraftType("study");
-    setDraftMinutes(60);
   }
 
   function openDraft(slot: TimeSlot) {
@@ -358,7 +361,6 @@ export function App() {
     const minutes = Math.max(1, Math.ceil(timerElapsedSeconds / 60));
     const updated = await api.patchTask(task.id, {
       actual_minutes: (task.actual_minutes || 0) + minutes,
-      status: "completed"
     });
     setGoal(updated);
     setTimerTask(null);
@@ -374,6 +376,56 @@ export function App() {
       setGoal(nextGoal);
     } catch {
       // Keep the current UI if the side refresh fails; the chat still carries the answer.
+    }
+  }
+
+  async function createManualPlan() {
+    const title = manualPlanTitle.trim();
+    if (!title) return;
+    setManualPlanSaving(true);
+    setManualPlanError(null);
+    try {
+      const nextGoal = await api.createManualPlan({
+        title,
+        description: manualPlanDescription.trim(),
+        target_score: manualPlanTargetScore,
+        exam_date: manualPlanExamDate,
+      });
+      setGoal(nextGoal);
+      setActiveWorkbenchTab("plan");
+      await refreshPlanVersions();
+      await refreshStudyReview(nextGoal);
+    } catch (err) {
+      setManualPlanError(err instanceof Error ? err.message : "创建手动规划失败");
+    } finally {
+      setManualPlanSaving(false);
+    }
+  }
+
+  function openGoalEditor() {
+    setGoalDraftTitle(goal?.title ?? "");
+    setGoalDraftDescription(goal?.description ?? "");
+    setGoalEditError(null);
+    setGoalEditing(true);
+  }
+
+  async function saveGoalMetadata() {
+    const title = goalDraftTitle.trim();
+    if (!title) return;
+    setGoalSaving(true);
+    setGoalEditError(null);
+    try {
+      const nextGoal = await api.patchGoal({
+        title,
+        description: goalDraftDescription.trim(),
+      });
+      setGoal(nextGoal);
+      setGoalEditing(false);
+      void refreshPlanVersions();
+    } catch (err) {
+      setGoalEditError(err instanceof Error ? err.message : "保存目标失败");
+    } finally {
+      setGoalSaving(false);
     }
   }
 
@@ -402,6 +454,19 @@ export function App() {
     }
   }
 
+  async function openDailyReview() {
+    try {
+      const today = formatAppDate(new Date());
+      const data = await api.generateDailyReviewDocument(today);
+      const tree = await api.getWorkspaceTree();
+      setFileTree(tree.tree);
+      await handleFileSelect(data.path);
+      setActiveWorkbenchTab("workspace");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "打开当日复盘失败");
+    }
+  }
+
   async function restorePlanVersion(goalId: string) {
     setRestoringPlanId(goalId);
     setPlanVersionsError(null);
@@ -419,64 +484,49 @@ export function App() {
     }
   }
 
+  async function archivePlanVersion(goalId: string) {
+    if (!window.confirm("归档当前计划后，当前规划区会暂时为空。确定归档吗？")) return;
+    setArchivingPlanId(goalId);
+    setPlanVersionsError(null);
+    try {
+      const data = await api.archivePlanVersion(goalId);
+      setGoal(data.goal);
+      setPlanVersions(data.versions);
+      if (!data.goal) {
+        setDailyFeedback(null);
+      }
+      const tree = await api.getWorkspaceTree();
+      setFileTree(tree.tree);
+    } catch (err) {
+      setPlanVersionsError(err instanceof Error ? err.message : "归档计划失败");
+    } finally {
+      setArchivingPlanId(null);
+    }
+  }
+
+  async function deletePlanVersion(goalId: string) {
+    if (!window.confirm("删除后无法在版本列表中恢复。确定删除这个历史计划吗？")) return;
+    setDeletingPlanId(goalId);
+    setPlanVersionsError(null);
+    try {
+      const data = await api.deletePlanVersion(goalId);
+      setPlanVersions(data.versions);
+      const tree = await api.getWorkspaceTree();
+      setFileTree(tree.tree);
+    } catch (err) {
+      setPlanVersionsError(err instanceof Error ? err.message : "删除计划失败");
+    } finally {
+      setDeletingPlanId(null);
+    }
+  }
+
   async function refreshErrorCandidates() {
     try {
       const data = await api.getErrorCandidates("pending");
       setErrorCandidates(data.candidates);
       setCandidateError(null);
     } catch (err) {
-      setCandidateError(err instanceof Error ? err.message : "加载错题候选失败");
-    }
-  }
-
-  async function generateCandidateFromText() {
-    const text = wrongQuestionText.trim();
-    if (!text) return;
-    setCandidateLoading(true);
-    setCandidateError(null);
-    try {
-      const artifact = await api.createLearningArtifact({
-        source_type: "manual",
-        title: "手动错题材料",
-        raw_text: text,
-        metadata: { origin: "workbench" },
-      });
-      await api.generateErrorCandidate({
-        artifact_id: artifact.artifact.id,
-        hint: "用户在工作台提交错题材料，请生成候选错因归因。",
-      });
-      setWrongQuestionText("");
-      await refreshErrorCandidates();
-    } catch (err) {
-      setCandidateError(err instanceof Error ? err.message : "生成错题候选失败");
-    } finally {
-      setCandidateLoading(false);
-    }
-  }
-
-  async function generateCandidateFromCurrentFile() {
-    const text = previewContent?.trim();
-    if (!selectedPath || !text) return;
-    setCandidateLoading(true);
-    setCandidateError(null);
-    try {
-      const artifact = await api.createLearningArtifact({
-        source_type: "workspace_file",
-        source_ref: selectedPath,
-        title: getPathName(selectedPath),
-        raw_text: text,
-        metadata: { origin: "workspace_preview", mime: previewMime },
-      });
-      await api.generateErrorCandidate({
-        artifact_id: artifact.artifact.id,
-        hint: "用户从工作台文件预览提交错题材料，请保留文件证据来源并生成候选错因归因。",
-      });
-      setActiveWorkbenchTab("plan");
-      await refreshErrorCandidates();
-    } catch (err) {
-      setCandidateError(err instanceof Error ? err.message : "从当前文档生成错题候选失败");
-    } finally {
-      setCandidateLoading(false);
+      setCandidateError(err instanceof Error ? err.message : "加载复盘素材失败");
     }
   }
 
@@ -488,7 +538,7 @@ export function App() {
       await refreshErrorCandidates();
       await refreshStudyReview();
     } catch (err) {
-      setCandidateError(err instanceof Error ? err.message : "更新错题候选失败");
+      setCandidateError(err instanceof Error ? err.message : "更新复盘素材失败");
     } finally {
       setUpdatingCandidateId(null);
     }
@@ -499,65 +549,41 @@ export function App() {
     setReviewError(null);
     try {
       const today = formatAppDate(new Date());
-      const [daily, weekly] = await Promise.all([
-        api.getDailyFeedback(today),
-        api.getWeeklyReview(nextGoal.weekly_plan.week_start),
-      ]);
+      const daily = await api.getDailyFeedback(today);
       setDailyFeedback(daily);
-      setWeeklyReview(weekly.review);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : "加载复盘失败");
     }
   }
 
-  async function generateWeeklyReview(regenerate = false) {
-    if (!goal?.weekly_plan) return;
-    setReviewLoading(true);
-    setReviewError(null);
-    try {
-      const data = await api.createWeeklyReview({
-        week_start: goal.weekly_plan.week_start,
-        week_end: goal.weekly_plan.week_end,
-        regenerate,
-      });
-      setWeeklyReview(data.review);
-      const daily = await api.getDailyFeedback(formatAppDate(new Date()));
-      setDailyFeedback(daily);
-    } catch (err) {
-      setReviewError(err instanceof Error ? err.message : "生成周复盘失败");
-    } finally {
-      setReviewLoading(false);
-    }
-  }
-
-  async function handleUploadFile(file: File) {
+  function handleAttachFile(file: File) {
     setUploadError(null);
+    if (sendingChat) {
+      setUploadError("请等当前回复结束后再添加附件");
+      return;
+    }
     const ext = getFileExtension(file.name);
     if (!supportedUploadExtensions.includes(ext)) {
-      setUploadError("仅支持 PDF、Word 和常见文本文件");
+      setUploadError("仅支持 PDF、Word、JPG 和常见文本文件");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
       setUploadError("文件不能超过 10MB");
       return;
     }
+    setPendingAttachment(file);
+    setPendingAttachmentForReview(false);
+  }
 
+  async function uploadAttachmentForChat(file: File, target?: "review") {
     uploadAbortRef.current?.abort();
     const controller = new AbortController();
     uploadAbortRef.current = controller;
     setUploadingFile(file.name);
     try {
-      const data = await api.uploadWorkspaceFile(file, controller.signal);
+      const data = await api.uploadWorkspaceFile(file, controller.signal, target ? { target } : undefined);
       setFileTree(data.tree);
       setActiveWorkbenchTab("workspace");
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "user",
-          content: `用户上传了 ${file.name}`,
-          created_at: new Date().toISOString(),
-        },
-      ]);
       if (data.file?.path) {
         setSelectedPath(data.file.path);
         setPreviewLoading(true);
@@ -565,36 +591,75 @@ export function App() {
           const result = await api.getWorkspaceFile(data.file.path);
           setPreviewContent(result.content);
           setPreviewMime(result.mime);
-          if (result.content !== null) {
-            setLeftCollapsed(true);
-          }
+          if (result.content !== null) setLeftCollapsed(true);
         } catch {
           setPreviewContent(null);
         } finally {
           setPreviewLoading(false);
         }
       }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setUploadError(err instanceof Error ? err.message : "上传失败");
-      }
+      return data.file.path;
     } finally {
       setUploadingFile(null);
       uploadAbortRef.current = null;
     }
   }
 
-  function sendChat() {
-    const content = chatInput.trim();
+  async function sendChat() {
+    if (sendingChat || uploadingFile) return;
+    const typedText = chatInput.trim();
+    const attachment = pendingAttachment;
+    if (!typedText && !attachment) return;
+
+    if (!attachment) {
+      sendChatContent(typedText, true);
+      return;
+    }
+
+    setUploadError(null);
+    try {
+      const markedForReview = pendingAttachmentForReview;
+      const workspacePath = await uploadAttachmentForChat(attachment, markedForReview ? "review" : undefined);
+      const displayText = buildAttachmentDisplayText(typedText, attachment.name, markedForReview);
+      setPendingAttachment(null);
+      setPendingAttachmentForReview(false);
+      setChatInput("");
+      sendChatContent(buildAttachmentPrompt(typedText, attachment.name, workspacePath, markedForReview), false, displayText);
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setUploadError(err instanceof Error ? err.message : "上传失败");
+      }
+    }
+  }
+
+  function buildAttachmentDisplayText(userText: string, originalName: string, markedForReview: boolean) {
+    const lines = [userText, `附件：${originalName}`, markedForReview ? "已标记：入复盘" : ""].filter(Boolean);
+    return lines.join("\n");
+  }
+
+  function buildAttachmentPrompt(userText: string, originalName: string, workspacePath: string, markedForReview: boolean) {
+    return [
+      userText || "用户只发送了这个文件，还没有说明用途。",
+      markedForReview ? "用户选择：入复盘" : "",
+      "",
+      "# 附件上下文",
+      `原始文件名：${originalName}`,
+      `工作区路径：${workspacePath}`,
+    ].filter(Boolean).join("\n");
+  }
+
+  function sendChatContent(rawContent: string, clearInput = false, displayContent = rawContent) {
+    const content = rawContent.trim();
+    const visibleContent = displayContent.trim();
     if (!content || sendingChat) return;
 
     const userMessage: ChatMessage = {
       role: "user",
-      content,
+      content: visibleContent,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setChatInput("");
+    if (clearInput) setChatInput("");
     setSendingChat(true);
 
     let streamedText = "";
@@ -659,7 +724,7 @@ export function App() {
     });
 
     setStreamRef(stream);
-    stream.send(content, activeSessionId);
+    stream.send(content, activeSessionId, visibleContent);
   }
 
   function abortChat() {
@@ -842,13 +907,21 @@ export function App() {
           currentToolLabel={currentToolLabel}
           chatInput={chatInput}
           onChatInputChange={setChatInput}
+          pendingAttachment={pendingAttachment}
+          attachmentForReview={pendingAttachmentForReview}
           uploadingFile={uploadingFile}
           uploadError={uploadError}
           conversationRef={conversationRef}
           fileInputRef={fileInputRef}
           onSend={sendChat}
+          onSelectChoice={(choice) => sendChatContent(`我选择：${choice}`)}
           onAbort={abortChat}
-          onUploadFile={handleUploadFile}
+          onAttachFile={handleAttachFile}
+          onAttachmentForReviewChange={setPendingAttachmentForReview}
+          onRemoveAttachment={() => {
+            setPendingAttachment(null);
+            setPendingAttachmentForReview(false);
+          }}
           onCancelUpload={() => uploadAbortRef.current?.abort()}
         />
         {!rightCollapsed && (
@@ -881,36 +954,50 @@ export function App() {
           planVersionsLoading={planVersionsLoading}
           planVersionsError={planVersionsError}
           restoringPlanId={restoringPlanId}
+          archivingPlanId={archivingPlanId}
+          deletingPlanId={deletingPlanId}
+          manualPlanTitle={manualPlanTitle}
+          manualPlanDescription={manualPlanDescription}
+          manualPlanTargetScore={manualPlanTargetScore}
+          manualPlanExamDate={manualPlanExamDate}
+          manualPlanSaving={manualPlanSaving}
+          manualPlanError={manualPlanError}
+          goalEditing={goalEditing}
+          goalDraftTitle={goalDraftTitle}
+          goalDraftDescription={goalDraftDescription}
+          goalSaving={goalSaving}
+          goalEditError={goalEditError}
           errorCandidates={errorCandidates}
-          wrongQuestionText={wrongQuestionText}
-          candidateLoading={candidateLoading}
           candidateError={candidateError}
           updatingCandidateId={updatingCandidateId}
-          dailyFeedback={dailyFeedback}
-          weeklyReview={weeklyReview}
-          reviewLoading={reviewLoading}
-          reviewError={reviewError}
+          selectedPlanDate={selectedPlanDate}
+          onSelectedPlanDateChange={setSelectedPlanDate}
           onOpenPlanDocument={() => void openPlanDocument()}
+          onOpenDailyReview={() => void openDailyReview()}
           onRefreshPlanVersions={() => void refreshPlanVersions()}
           onRestorePlanVersion={(goalId) => void restorePlanVersion(goalId)}
-          onWrongQuestionTextChange={setWrongQuestionText}
-          onGenerateCandidate={() => void generateCandidateFromText()}
-          onGenerateCandidateFromCurrentFile={() => void generateCandidateFromCurrentFile()}
+          onArchivePlanVersion={(goalId) => void archivePlanVersion(goalId)}
+          onDeletePlanVersion={(goalId) => void deletePlanVersion(goalId)}
+          onManualPlanTitleChange={setManualPlanTitle}
+          onManualPlanDescriptionChange={setManualPlanDescription}
+          onManualPlanTargetScoreChange={setManualPlanTargetScore}
+          onManualPlanExamDateChange={setManualPlanExamDate}
+          onCreateManualPlan={() => void createManualPlan()}
+          onGoalEditingChange={(editing) => editing ? openGoalEditor() : setGoalEditing(false)}
+          onGoalDraftTitleChange={setGoalDraftTitle}
+          onGoalDraftDescriptionChange={setGoalDraftDescription}
+          onSaveGoalMetadata={() => void saveGoalMetadata()}
           onRefreshCandidates={() => void refreshErrorCandidates()}
           onConfirmCandidate={(candidate) => void updateCandidateStatus(candidate, "confirmed")}
           onDismissCandidate={(candidate) => void updateCandidateStatus(candidate, "dismissed")}
-          onRefreshStudyReview={() => void refreshStudyReview()}
-          onGenerateWeeklyReview={() => void generateWeeklyReview(true)}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           draftSlot={draftSlot}
           draftTitle={draftTitle}
           draftType={draftType}
-          draftMinutes={draftMinutes}
           onDraftSlotChange={setDraftSlot}
           onDraftTitleChange={setDraftTitle}
           onDraftTypeChange={setDraftType}
-          onDraftMinutesChange={setDraftMinutes}
           groupedTasks={groupedTasks}
           weekDays={weekDays}
           onUpdateTask={updateTask}

@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { initDatabase } from "../db.js";
-import { ensureWorkspace, getWorkspacePath, listTree, writeFile, readFile, deleteFile, renameFile } from "../services/workspace-service.js";
+import { ensureWorkspace, getWorkspacePath, listTree, writeFile, readFile, deleteFile, renameFile, saveUpload } from "../services/workspace-service.js";
 
 const testDir = path.join(os.tmpdir(), `akari-workspace-test-${Date.now()}`);
 
@@ -51,6 +51,13 @@ describe("workspace-service", () => {
     expect(rtf.mime).toBe("application/rtf");
   });
 
+  it("reads jpg images as previewable data URLs", async () => {
+    fs.writeFileSync(path.join(testDir, "photo.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    const jpg = await readFile("photo.jpg");
+    expect(jpg.mime).toBe("image/jpeg");
+    expect(jpg.content).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
   it("loads docx parser", async () => {
     const mammothModule = await import("mammoth");
     const mammoth = mammothModule.default ?? mammothModule;
@@ -78,6 +85,18 @@ describe("workspace-service", () => {
     renameFile("old-name.txt", "new-name.txt");
     expect(fs.existsSync(path.join(testDir, "new-name.txt"))).toBe(true);
     expect(fs.existsSync(path.join(testDir, "old-name.txt"))).toBe(false);
+  });
+
+  it("saveUpload stores ordinary files in workspace root", () => {
+    const stored = saveUpload("普通文件.txt", Buffer.from("hello"));
+    expect(stored.path).toBe("普通文件.txt");
+    expect(fs.existsSync(path.join(testDir, "普通文件.txt"))).toBe(true);
+  });
+
+  it("saveUpload stores review files in review folder", () => {
+    const stored = saveUpload("资料分析错题.pdf", Buffer.from("pdf"), "review");
+    expect(stored.path).toBe(path.join("review", "资料分析错题.pdf"));
+    expect(fs.existsSync(path.join(testDir, "review", "资料分析错题.pdf"))).toBe(true);
   });
 
   it("rejects path traversal", () => {

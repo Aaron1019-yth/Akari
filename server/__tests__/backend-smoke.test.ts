@@ -48,7 +48,6 @@ describe("Backend smoke", () => {
         title: "资料复盘",
         type: "review",
         subject: "资料分析",
-        estimated_minutes: 25,
         time_slot: "evening",
         date: new Date().toISOString().slice(0, 10),
       });
@@ -73,17 +72,16 @@ describe("Backend smoke", () => {
     expect(patchedTask.status).toBe("completed");
     expect(patchedTask.actual_minutes).toBe(12);
 
-    // ── Patch task (title + estimated_minutes) ──
+    // ── Patch task (title only) ──
     const editResp = await request(app)
       .patch(`/api/planner/task/${createdTask.id}`)
-      .send({ title: "资料复盘修订版", estimated_minutes: 40 });
+      .send({ title: "资料复盘修订版" });
     expect(editResp.status).toBe(200);
     const editedGoal = editResp.body;
     const editedTask = editedGoal.weekly_plan.tasks.find(
       (t: { id: string }) => t.id === createdTask.id
     );
     expect(editedTask.title).toBe("资料复盘修订版");
-    expect(editedTask.estimated_minutes).toBe(40);
 
     // ── Delete task ──
     const deleteResp = await request(app).delete(

@@ -68,7 +68,6 @@ export function initDatabase(): void {
       type TEXT NOT NULL,
       subject TEXT NOT NULL,
       question_count INTEGER NOT NULL DEFAULT 0,
-      estimated_minutes INTEGER NOT NULL DEFAULT 0,
       actual_minutes INTEGER NOT NULL DEFAULT 0,
       time_slot TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -120,7 +119,7 @@ export function initDatabase(): void {
       daily_task_id TEXT NOT NULL REFERENCES daily_tasks(id) ON DELETE CASCADE,
       actual_minutes INTEGER NOT NULL DEFAULT 0,
       difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'ok', 'hard')),
-      focus TEXT NOT NULL CHECK (focus IN ('focused', 'normal', 'distracted', 'tired')),
+      focus TEXT NOT NULL CHECK (focus IN ('focused', 'normal', 'distracted')),
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -152,6 +151,12 @@ export function initDatabase(): void {
       daily_task_id TEXT REFERENCES daily_tasks(id) ON DELETE SET NULL,
       module_id TEXT REFERENCES modules(id) ON DELETE SET NULL,
       subject TEXT NOT NULL DEFAULT '',
+      question_type TEXT NOT NULL DEFAULT '',
+      review_kind TEXT NOT NULL DEFAULT '',
+      question_text TEXT NOT NULL DEFAULT '',
+      user_answer TEXT NOT NULL DEFAULT '',
+      correct_answer TEXT NOT NULL DEFAULT '',
+      choice_reason TEXT NOT NULL DEFAULT '',
       question_summary TEXT NOT NULL DEFAULT '',
       mistake_summary TEXT NOT NULL DEFAULT '',
       cause TEXT NOT NULL DEFAULT '',
@@ -185,3 +190,4 @@ export function initDatabase(): void {
     );
   `);
 }
+

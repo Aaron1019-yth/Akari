@@ -1,5 +1,7 @@
 # Akari V2 Plan Workspace Design
 
+> 过程归档：本文件已合并进 `../../V2-design.md`，当前事实以根目录权威文档和代码为准。
+
 Last updated: 2026-06-11
 
 V2 should move Akari from "AI generates a plan" to "the user owns an editable plan workspace, and Agent helps maintain it." Plans must be visible, versioned, importable, and allowed to be incomplete.

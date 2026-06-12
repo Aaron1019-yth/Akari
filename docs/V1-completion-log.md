@@ -243,7 +243,7 @@
 - README 同步为 V1 冻结后的真实入口：推荐 `npm run dev:web` / `npm run dev:desktop`，补充首次 Settings 配置和最短演示流程。
 - Handoff 同步为当前协作真相：前端 transport 类型整理已完成，不再作为当前待办；V1 不继续拆 `App.tsx` / `Workbench.tsx` / CSS。
 - CLAUDE.md 同步启动命令、当前 `features/` + `shared/ui/` 前端目录结构和文档索引。
-- 新增 `docs/Akari-v1-demo-script.md`，作为 V1 演示与验收 checklist。
+- 新增 `docs/superpowers/plans/V1-demo-script.md`，作为 V1 演示与验收 checklist。
 
 ### 验证
 
@@ -264,8 +264,8 @@
 
 ### 文档同步
 
-- `docs/Akari-spec-v1.roadmap.md` 已更新 V2 MVP 目标和不做范围。
-- 新增 `docs/Akari-design-v2.feedback.md`，作为 V2 数据模型、API 和前端交互设计草案。
+- `docs/roadmap.md` 已更新 V2 MVP 目标和不做范围。
+- 新增 `docs/superpowers/specs/V2-feedback.md`，作为 V2 数据模型、API 和前端交互设计草案。
 
 ## V2 Step 1 — DB Schema & API Contract（2026-06-11）
 
@@ -273,7 +273,7 @@
 
 ### 完成范围
 
-- 在 `docs/Akari-design-v2.feedback.md` 中补齐 V2 additive DB schema：
+- 在 `docs/superpowers/specs/V2-feedback.md` 中补齐 V2 additive DB schema：
   - `task_feedback`
   - `learning_artifacts`
   - `error_candidates`
@@ -389,7 +389,7 @@
   - 同步一份到 `plans/history/YYYY-MM-DD-goal_xxx.md`
 - 计划生成、任务编辑、任务删除、任务反馈和 Agent `generate_plan` 后自动同步当前计划 Markdown。
 - 已将当前恢复后的 active plan 立即同步到 `/Users/aaron/Desktop/Akari-WorkSpace/plans/current-plan.md`。
-- 新增 `docs/Akari-design-v2.plan_workspace.md`，明确：
+- 新增 `docs/superpowers/specs/V2-plan-workspace.md`，明确：
   - 计划版本管理
   - Markdown 双向导入/回写方向
   - 用户手写计划和空周计划
@@ -507,3 +507,106 @@
   - `我的规划` 可见 `今日` / `本周` 和任务区
   - `我的规划` 不再显示 `错题归因` / `学习复盘`
   - `复盘错题` 可见 `计划版本` / `错题归因` / `学习复盘`
+
+## V2 Step 8 — P0 Feedback Polish（2026-06-12）
+
+- 状态：已完成任务反馈、复盘素材和计划版本的验收修正
+
+### 完成范围
+
+- 任务完成反馈改为轻量浮层：点击今日任务 checkbox 后弹出，不挤压任务列表。
+- 反馈浮层支持三种关闭方式：再次点击 checkbox、点击外部区域、按 `Esc`。
+- 移除 `跳过` 按钮；用户不填写反馈即可关闭，不会误完成任务。
+- 反馈文案改为更适合长期复盘的提示：`留一句给之后的自己：这次最值得记住的是什么？`
+- 右侧「错题归因」语义调整为「复盘素材」：强调整理错题原件/批注/反思，而不是让 AI 代替用户做错因判断。
+- 计划版本补齐归档/删除：active 计划只能归档，archived 历史计划可以删除。
+- 修复归档历史 Markdown 状态：归档后写入历史文档时状态为 `archived`。
+- 新增/更新 P0 手动验收脚本，覆盖任务反馈、复盘素材、周复盘、计划版本恢复/归档/删除。
+
+### 验证
+
+- `npm run build`：通过
+- `npm run test:api`：通过
+
+## V2 Step 9 — Chat Markdown Tables & Choice Buttons（2026-06-12）
+
+- 状态：已完成对话渲染打磨
+
+### 完成范围
+
+- 引入 `remark-gfm`，assistant 消息支持 GFM Markdown 表格渲染。
+- Workspace Markdown 文件预览同样支持 GFM 表格。
+- 新增轻量选择题交互协议：Agent 可在回复末尾输出 `[选项: 选项1 | 选项2 | 选项3 | 不确定]`。
+- 前端会隐藏该协议行，渲染为选择按钮。
+- 点击选择按钮会发送普通用户消息 `我选择：...`，不新增 WebSocket 协议。
+- System prompt 和 ASK route prompt 调整：适合追问时优先给 3-5 个短选项；开放问题不强制选择题化。
+
+### 验证
+
+- `npm run build`：通过
+- `npm run test:api`：通过
+- `npm run lint`：0 errors，仅剩既有 warnings。
+
+## V2 Step 10 — Dev Server Process Cleanup（2026-06-12）
+
+- 状态：已完成 dev:web 残留进程修复
+
+### 问题
+
+- `npm run dev:web` 原先通过嵌套 npm 脚本启动 Vite/API，真实监听进程可能作为孙进程残留。
+- 残留后再次启动会出现 `5173` 或 `8742` 被占用，Vite 还可能自动切到 `5174`，导致验证环境不一致。
+
+### 完成范围
+
+- `scripts/dev-web.mjs` 改为直接启动本地 `vite` 和 `tsx --watch` binary。
+- 启动前检查 `5173` 和 `8742` 是否空闲。
+- Vite 使用 `--strictPort`，端口被占用时直接失败。
+- shutdown 时清理子进程组，减少残留监听进程。
+- 如果已有 Akari dev server 占用端口，脚本提示：`Port 5173 is already in use. Stop the existing Akari dev server first.`
+
+### 验证
+
+- 启动/停止后端口不再残留本次 dev server。
+- 人为占用 `5173` 时，`npm run dev:web` 会拒绝启动，而不是切到其它端口。
+
+## V2 Step 11 — Manual Planning & Detailed Markdown Review（2026-06-12）
+
+- 状态：已完成 V2 MVP 验收反馈修正
+
+### 背景
+
+- 验收反馈指出：无 active plan 时「我的规划」不可用；用户不应被强制要求先和 Agent 对话才能使用任务、目标和复盘功能。
+- 「复盘素材」界面本身不应大改；问题在于生成的周复盘过薄，无法服务公考言语复盘。
+- 公考言语复盘的核心不是让 AI 代替用户想答案，而是整理错题、纠结题、耗时题、低正确率题所需的数据和自查问题。
+
+### 完成范围
+
+- 后端新增 `POST /api/planner/manual`：无 active plan 时可手动创建目标、描述、目标分、考试日期和当前周空计划。
+- 后端新增 `PATCH /api/planner/goal`：支持更新 active goal 的 title、description、target_score、exam_date。
+- 手动创建计划会归档旧 active goal、创建默认 tracks/modules/profile、创建当前周 weekly plan，并同步 `plans/current-plan.md`。
+- 「我的规划」无 active plan 时显示手动建立规划表单，而不是空状态。
+- 目标卡支持编辑 title / description。
+- 日视图新增本周日期 chip，可在当前周任意一天之间切换。
+- 日视图新增任务使用当前选中的日期；周视图点击某天可跳转到该日视图。
+- `createWeeklyReview()` 生成详细 Markdown，包含：
+  - 学习完成情况
+  - 复盘素材总览
+  - 言语复盘数据整理表
+  - 下周复盘动作
+  - “仅整理数据，不替代用户自查”的边界说明
+- 前端周复盘支持 Markdown modal：生成后可打开浮窗查看详细复盘。
+- 会话列表 preview 缩短到约 22 字，并去掉“请帮我/帮我/我想”等弱开头。
+
+### 验证
+
+- `npm run build`：通过
+- `npm run test:api`：49 passed
+- `npm run lint`：0 errors，8 warnings
+- 浏览器/API 冒烟：已有 Akari dev server 占用 `5173/8742` 时，`npm run dev:web` 正确拒绝重复启动；前端与 `/api/health` 可访问。
+
+### 当前限制
+
+- 不做数据库迁移；继续复用现有 additive tables。
+- 不做跨周日历系统；日期切换只覆盖 active weekly plan 的 7 天。
+- 不新增 structured review schema；详细 Markdown 仍存入 `study_reviews.summary`。
+- 不自动判断用户言语题真实错误原因，只提供材料整理和自查提示。

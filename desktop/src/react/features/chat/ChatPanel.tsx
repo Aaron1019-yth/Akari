@@ -1,6 +1,23 @@
-import { ExternalLink, Loader2, Plus } from "lucide-react";
+import { ExternalLink, FileText, Loader2, Plus, X } from "lucide-react";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ChatMessage, GoalTree } from "../../../../../shared/exam-schema";
+
+const CHOICE_LINE_RE = /^\s*\[选项:\s*(.+?)\s*\]\s*$/;
+const markdownPlugins = [remarkGfm];
+
+function parseAssistantContent(content: string): { markdown: string; choices: string[] } {
+  const choices: string[] = [];
+  const lines = content.split("\n");
+  const markdownLines = lines.filter((line) => {
+    const match = line.match(CHOICE_LINE_RE);
+    if (!match) return true;
+    choices.push(...match[1].split("|").map((choice) => choice.trim()).filter(Boolean));
+    return false;
+  });
+  return { markdown: markdownLines.join("\n").trim(), choices };
+}
 
 interface ChatPanelProps {
   loading: boolean;
@@ -10,13 +27,18 @@ interface ChatPanelProps {
   currentToolLabel: string | null;
   chatInput: string;
   onChatInputChange: (value: string) => void;
+  pendingAttachment: File | null;
+  attachmentForReview: boolean;
   uploadingFile: string | null;
   uploadError: string | null;
   conversationRef: React.RefObject<HTMLElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onSend: () => void;
+  onSelectChoice: (choice: string) => void;
   onAbort: () => void;
-  onUploadFile: (file: File) => void;
+  onAttachFile: (file: File) => void;
+  onAttachmentForReviewChange: (value: boolean) => void;
+  onRemoveAttachment: () => void;
   onCancelUpload: () => void;
 }
 
@@ -28,15 +50,25 @@ export function ChatPanel({
   currentToolLabel,
   chatInput,
   onChatInputChange,
+  pendingAttachment,
+  attachmentForReview,
   uploadingFile,
   uploadError,
   conversationRef,
   fileInputRef,
   onSend,
+  onSelectChoice,
   onAbort,
-  onUploadFile,
+  onAttachFile,
+  onAttachmentForReviewChange,
+  onRemoveAttachment,
   onCancelUpload,
 }: ChatPanelProps) {
+  const parsedMessages = useMemo(() => messages.map((message) => ({
+    message,
+    parsed: message.role === "assistant" ? parseAssistantContent(message.content) : null,
+  })), [messages]);
+
   return (
     <main
       className="chat-panel"
@@ -44,11 +76,11 @@ export function ChatPanel({
       onDrop={(event) => {
         event.preventDefault();
         const file = event.dataTransfer.files[0];
-        if (file) void onUploadFile(file);
+        if (file) onAttachFile(file);
       }}
       onPaste={(event) => {
         const file = event.clipboardData.files[0];
-        if (file) void onUploadFile(file);
+        if (file) onAttachFile(file);
       }}
     >
       <section className="conversation" ref={conversationRef}>
@@ -66,6 +98,9 @@ export function ChatPanel({
               </svg>
             </div>
             <h1>Akari 随时都在</h1>
+            <p className="agent-empty-tagline">
+              我不替代粉笔错题本。把粉笔导出的错题资料拖进来，我帮你提炼跨题诊断、记忆清单和下一步训练建议。
+            </p>
             <div className="agent-links">
               <span className="agent-link">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -79,13 +114,24 @@ export function ChatPanel({
             </div>
           </div>
         )}
-        {messages.length > 0 && (
+        {parsedMessages.length > 0 && (
           <div className="message-list">
-            {messages.map((message, index) => (
+            {parsedMessages.map(({ message, parsed }, index) => (
               <article className={`chat-message ${message.role}`} key={`${message.created_at}-${index}`}>
                 <span>{message.role === "user" ? "你" : "Akari"}</span>
                 {message.role === "assistant" ? (
-                  <div className="markdown-body"><ReactMarkdown>{message.content}</ReactMarkdown></div>
+                  <>
+                    <div className="markdown-body"><ReactMarkdown remarkPlugins={markdownPlugins}>{parsed?.markdown ?? ""}</ReactMarkdown></div>
+                    {parsed?.choices.length ? (
+                      <div className="chat-choice-list" aria-label="可选回答">
+                        {parsed.choices.map((choice) => (
+                          <button key={choice} className="chat-choice-button" disabled={sendingChat} onClick={() => onSelectChoice(choice)}>
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <p>{message.content}</p>
                 )}
@@ -100,11 +146,11 @@ export function ChatPanel({
           ref={fileInputRef}
           hidden
           type="file"
-          accept=".pdf,.docx,.md,.markdown,.txt,.csv,.tsv,.json,.jsonl,.yaml,.yml,.rtf,.html,.htm,.xml,.tex,.log"
+          accept=".pdf,.docx,.jpg,.jpeg,.md,.markdown,.txt,.csv,.tsv,.json,.jsonl,.yaml,.yml,.rtf,.html,.htm,.xml,.tex,.log"
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.currentTarget.value = "";
-            if (file) void onUploadFile(file);
+            if (file) onAttachFile(file);
           }}
         />
         <textarea
@@ -119,6 +165,29 @@ export function ChatPanel({
             }
           }}
         />
+        {pendingAttachment && (
+          <div className="composer-attachment-row">
+            <div className="composer-attachment-chip">
+              <FileText size={16} />
+              <span>{pendingAttachment.name}</span>
+              <button aria-label="移除附件" disabled={sendingChat || Boolean(uploadingFile)} onClick={onRemoveAttachment}>
+                <X size={14} />
+              </button>
+            </div>
+            <label className="composer-review-toggle" title="勾选后文件归档到 review/ 文件夹，并纳入今日复盘">
+              <input
+                type="checkbox"
+                checked={attachmentForReview}
+                disabled={sendingChat || Boolean(uploadingFile)}
+                onChange={(event) => onAttachmentForReviewChange(event.target.checked)}
+              />
+              入复盘
+            </label>
+            {/\.(jpg|jpeg)$/i.test(pendingAttachment.name) && (
+              <span className="composer-attachment-hint">图片仅归档与预览；复盘建议附一段文字说明。</span>
+            )}
+          </div>
+        )}
         {(uploadingFile || uploadError) && (
           <div className="composer-upload-row">
             {uploadingFile ? (
@@ -142,7 +211,7 @@ export function ChatPanel({
               {currentToolLabel && <span className="tool-status">正在{currentToolLabel}...</span>}
             </>
           )}
-          <button className="send-button" disabled={!chatInput.trim() || sendingChat} onClick={() => void onSend()}>
+          <button className="send-button" disabled={(!chatInput.trim() && !pendingAttachment) || sendingChat || Boolean(uploadingFile)} onClick={() => void onSend()}>
             {sendingChat ? "发送中" : "发送"}
           </button>
         </div>

@@ -5,7 +5,7 @@ export type TimeSlot = "morning" | "afternoon" | "evening";
 export type TaskStatus = "pending" | "in_progress" | "completed" | "skipped";
 export type UiTheme = "agent_warm_paper" | "akari_cool" | "classic_beige";
 export type TaskDifficulty = "easy" | "ok" | "hard";
-export type TaskFocus = "focused" | "normal" | "distracted" | "tired";
+export type TaskFocus = "focused" | "normal" | "distracted";
 export type LearningArtifactSource = "workspace_file" | "chat" | "manual";
 export type ErrorCandidateStatus = "pending" | "confirmed" | "dismissed";
 export type StudyReviewScope = "daily" | "weekly";
@@ -41,7 +41,6 @@ export interface DailyTask {
   type: TaskType;
   subject: string;
   question_count: number;
-  estimated_minutes: number;
   actual_minutes: number;
   time_slot: TimeSlot;
   status: TaskStatus;
@@ -76,6 +75,12 @@ export interface ErrorCandidate {
   daily_task_id: string | null;
   module_id: string | null;
   subject: string;
+  question_type: string;
+  review_kind: string;
+  question_text: string;
+  user_answer: string;
+  correct_answer: string;
+  choice_reason: string;
   question_summary: string;
   mistake_summary: string;
   cause: string;
@@ -98,6 +103,33 @@ export interface StudyReview {
   updated_at: string;
 }
 
+export type PdfReviewPriority = "high" | "medium" | "low";
+
+export interface PdfReviewReport {
+  overview: string;
+  weak_points: Array<{
+    area: string;
+    evidence: string;
+    diagnosis: string;
+    priority: PdfReviewPriority;
+  }>;
+  memory_items: Array<{
+    item: string;
+    reason: string;
+    review_method: string;
+  }>;
+  fenbi_redo_actions: Array<{
+    title: string;
+    reason: string;
+    source_hint: string;
+  }>;
+  plan_suggestions: Array<{
+    suggestion: string;
+    reason: string;
+  }>;
+  source_warnings: string[];
+}
+
 export interface PlanVersionSummary {
   goal_id: string;
   title: string;
@@ -108,7 +140,6 @@ export interface PlanVersionSummary {
   week_end: string | null;
   task_count: number;
   completed_count: number;
-  estimated_minutes: number;
   actual_minutes: number;
   document_path: string;
 }
@@ -161,7 +192,6 @@ export interface TaskCreateRequest {
   title: string;
   type: TaskType;
   subject: string;
-  estimated_minutes: number;
   question_count?: number;
   time_slot: TimeSlot;
   date?: string;

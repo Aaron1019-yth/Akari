@@ -32,7 +32,7 @@ export function Sidebar({ sessions, activeSessionId, onSelectSession, onNewSessi
             className={`session ${s.session_id === activeSessionId ? "is-active" : ""}`}
             key={s.session_id}
           >
-            <button className="session-content" onClick={() => onSelectSession(s.session_id)}>
+            <button className="session-content" title={s.preview || s.session_id} onClick={() => onSelectSession(s.session_id)}>
               <MessageSquareText size={17} />
               <span>
                 {s.preview || s.session_id}

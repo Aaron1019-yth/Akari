@@ -50,6 +50,25 @@ describe("Intent Classifier", () => {
     clearSessionState(sessionB);
   });
 
+  it("routes file uploads to explicit file intents", () => {
+    const classifier = new IntentClassifier();
+    const fileContext = "\n\n# 附件上下文\n原始文件名：公务员行测-国考-行政执法类错题下载5题.pdf\n工作区路径：公务员行测-国考-行政执法类错题下载5题.pdf";
+
+    expect(classifier.classify(`这是我的资料分析错题${fileContext}`, "intent_file_a").intent).toBe(Intent.FILE_CHAT);
+    expect(classifier.classify(`总结这份文件${fileContext}`, "intent_file_b").intent).toBe(Intent.FILE_SUMMARY);
+    expect(classifier.classify(`计入复盘${fileContext}`, "intent_file_c").intent).toBe(Intent.REVIEW_RECORD);
+    expect(classifier.classify(`用户选择：入复盘${fileContext}`, "intent_file_review_toggle").intent).toBe(Intent.REVIEW_RECORD);
+    expect(classifier.classify(`帮我看看${fileContext}`, "intent_file_d").intent).toBe(Intent.FILE_CHAT);
+    expect(classifier.classify(`用户只发送了这个文件，还没有说明用途。${fileContext}`, "intent_file_e").intent).toBe(Intent.FILE_CHAT);
+
+    clearSessionState("intent_file_a");
+    clearSessionState("intent_file_b");
+    clearSessionState("intent_file_c");
+    clearSessionState("intent_file_review_toggle");
+    clearSessionState("intent_file_d");
+    clearSessionState("intent_file_e");
+  });
+
   it("reaches plan when all diagnostic fields are complete", () => {
     // Matches: test_intent_classifier_reaches_plan_when_fields_complete
     const sessionId = "phase1_complete_plan";
@@ -106,23 +125,20 @@ describe("File upload", () => {
 // ── Schema validation (unit test) ──
 
 describe("Schema validation", () => {
-  it("generate_plan rejects negative estimated_minutes", () => {
-    // Matches: test_generate_plan_schema_validation
+  it("generate_plan rejects unknown task type", () => {
     const { error } = validateGeneratedPlan({
       week_start: new Date().toISOString().slice(0, 10),
       tasks: [
         {
           title: "资料分析速算训练",
-          type: "practice",
+          type: "unknown_type",
           subject: "资料分析",
-          estimated_minutes: -1,
           time_slot: "afternoon",
           date: new Date().toISOString().slice(0, 10),
         },
       ],
     });
     expect(error).toBeTruthy();
-    expect(error).toContain("estimated_minutes");
   });
 });
 

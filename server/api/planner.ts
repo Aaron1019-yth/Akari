@@ -3,6 +3,8 @@ import {
   getActiveGoal,
   buildGoalTree,
   generateInitialPlan,
+  createManualPlan,
+  updateActiveGoal,
   getTasksForDate,
   updateTask,
   createTask,
@@ -11,6 +13,8 @@ import {
 } from "../services/planner-service.js";
 import {
   GeneratePlanRequest,
+  ManualPlanRequest,
+  GoalPatchRequest,
   TaskPatchRequest,
   TaskCreateRequest,
   TaskFeedbackRequest,
@@ -18,6 +22,9 @@ import {
 import { FeedbackError, saveTaskFeedback } from "../services/feedback-service.js";
 import { toAppDateString } from "../services/date-utils.js";
 import {
+  ActivePlanDeleteError,
+  archivePlanVersion,
+  deletePlanVersion,
   listPlanVersions,
   PlanDocumentError,
   restorePlanVersion,
@@ -46,6 +53,32 @@ router.post("/generate", (req: Request, res: Response) => {
   res.json(tree);
 });
 
+router.post("/manual", (req: Request, res: Response) => {
+  const parsed = ManualPlanRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ detail: parsed.error.errors });
+    return;
+  }
+  const tree = createManualPlan(parsed.data);
+  syncActivePlanDocument();
+  res.json(tree);
+});
+
+router.patch("/goal", (req: Request, res: Response) => {
+  const parsed = GoalPatchRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ detail: parsed.error.errors });
+    return;
+  }
+  try {
+    const tree = updateActiveGoal(parsed.data);
+    syncActivePlanDocument();
+    res.json(tree);
+  } catch {
+    res.status(404).json({ detail: "Active goal not found" });
+  }
+});
+
 router.get("/today", (_req: Request, res: Response) => {
   const dateStr = toAppDateString();
   const tasks = getTasksForDate(dateStr);
@@ -62,6 +95,36 @@ router.post("/versions/:goalId/restore", (req: Request, res: Response) => {
     res.json({ goal: restorePlanVersion(goalId), document_path: "plans/current-plan.md" });
   } catch (exc) {
     if (exc instanceof PlanDocumentError) {
+      res.status(404).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
+router.post("/versions/:goalId/archive", (req: Request, res: Response) => {
+  const goalId = req.params.goalId as string;
+  try {
+    const result = archivePlanVersion(goalId);
+    res.json({ goal: result.goal, versions: listPlanVersions(), document_path: result.documentPath });
+  } catch (exc) {
+    if (exc instanceof PlanDocumentError) {
+      res.status(404).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
+router.delete("/versions/:goalId", (req: Request, res: Response) => {
+  const goalId = req.params.goalId as string;
+  try {
+    const result = deletePlanVersion(goalId);
+    res.json({ ok: true, deleted_goal_id: result.deletedGoalId, deleted_document_paths: result.deletedDocumentPaths, versions: listPlanVersions() });
+  } catch (exc) {
+    if (exc instanceof ActivePlanDeleteError) {
+      res.status(409).json({ detail: exc.message });
+    } else if (exc instanceof PlanDocumentError) {
       res.status(404).json({ detail: exc.message });
     } else {
       res.status(500).json({ detail: "Internal error" });

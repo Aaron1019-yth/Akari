@@ -1,10 +1,12 @@
 # Akari MVP 完整设计规格（Phase 1–3）
 
+> 过程归档：本文件可能包含旧技术栈或旧架构设想，当前事实以 `../../README.md` 指向的根目录文档和代码为准。
+
 > **Phase 1**：对话式规划教练 — Agent 多轮交互收集信息，生成个性化每日计划，具备 web_search/web_fetch/read_document 通用工具。
 > **Phase 2**：学习总结与反馈 — 用户录入每日错题与感受，自动生成周总结报告。
 > **Phase 3**：计划自适应调整 — 基于总结数据动态优化下周计划。
 
-> **实现状态（2026-06-10）**：Phase 1 MVP 已完成，验收记录见 `docs/Akari-spec-v1.completion_log.md`。当前进入 Phase 1.5，重点为 UI/体验优化、会话管理、历史摘要与工程分层 polish。
+> **实现状态（2026-06-10）**：Phase 1 MVP 已完成，验收记录见 `docs/V1-completion-log.md`。当前进入 Phase 1.5，重点为 UI/体验优化、会话管理、历史摘要与工程分层 polish。
 
 ---
 

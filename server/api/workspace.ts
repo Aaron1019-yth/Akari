@@ -72,7 +72,12 @@ router.post("/upload", upload.single("file"), async (req: Request, res: Response
     return;
   }
   try {
-    const stored = saveUpload(req.file.originalname, req.file.buffer);
+    const target = typeof req.body?.target === "string" ? req.body.target : undefined;
+    if (target && target !== "review") {
+      res.status(400).json({ detail: "Invalid upload target" });
+      return;
+    }
+    const stored = saveUpload(req.file.originalname, req.file.buffer, target);
     const tree = listTree();
     res.json({ file: stored, tree, workspace_path: getWorkspacePath() });
   } catch (exc) {

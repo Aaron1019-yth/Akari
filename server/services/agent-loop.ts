@@ -12,6 +12,7 @@ import { chat, chatStream } from "./llm-client.js";
 import type { Message, StreamChunk, TokenUsage, ToolCall } from "./llm-types.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { createDocumentTools } from "./tools/document.js";
+import { createFeedbackTools } from "./tools/feedback.js";
 import { createGeneratePlanTool, validateGeneratedPlan } from "./tools/generate-plan.js";
 import { createPlannerTools } from "./tools/planner.js";
 import { createWebTools } from "./tools/web.js";
@@ -114,6 +115,7 @@ export class AgentLoop {
       ...createPlannerTools(),
       ...createWebTools(),
       ...createDocumentTools(),
+      ...createFeedbackTools(),
       createGeneratePlanTool(),
     ]) {
       this._tools.register(t);
@@ -125,8 +127,9 @@ export class AgentLoop {
     sessionId: string = "default",
     routeContext: string = "",
     abortSignal?: AbortSignal,
+    displayMessage: string = userMessage,
   ): AsyncGenerator<Record<string, unknown>> {
-    appendMessage(sessionId, "user", userMessage);
+    appendMessage(sessionId, "user", displayMessage);
 
     // Build initial messages array
     const messages: Message[] = [

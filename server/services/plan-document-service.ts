@@ -1,6 +1,8 @@
+import fs from "fs";
+import path from "path";
 import { db } from "../db.js";
 import { buildGoalTree, getActiveGoal } from "./planner-service.js";
-import { writeFile } from "./workspace-service.js";
+import { deleteFile, getWorkspacePath, writeFile } from "./workspace-service.js";
 import { toAppDateString } from "./date-utils.js";
 import type { GoalRow, PlanVersionSummaryOut } from "../types.js";
 import type { DailyTask, GoalTree, TaskStatus, TimeSlot } from "../../shared/exam-schema.js";
@@ -20,6 +22,8 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 
 export class PlanDocumentError extends Error {}
 
+export class ActivePlanDeleteError extends Error {}
+
 function escapeCell(value: string | number): string {
   return String(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
@@ -28,7 +32,7 @@ function taskLine(task: DailyTask): string {
   const status = STATUS_LABEL[task.status] ?? task.status;
   const slot = SLOT_LABEL[task.time_slot] ?? task.time_slot;
   const actual = task.actual_minutes ? `${task.actual_minutes}` : "";
-  return `| ${escapeCell(task.date)} | ${escapeCell(slot)} | ${escapeCell(task.title)} | ${escapeCell(task.subject)} | ${escapeCell(task.type)} | ${escapeCell(task.estimated_minutes)} | ${escapeCell(actual)} | ${escapeCell(status)} |`;
+  return `| ${escapeCell(task.date)} | ${escapeCell(slot)} | ${escapeCell(task.title)} | ${escapeCell(task.subject)} | ${escapeCell(task.type)} | ${escapeCell(actual)} | ${escapeCell(status)} |`;
 }
 
 function groupTasksByDate(tasks: DailyTask[]): Map<string, DailyTask[]> {
@@ -84,8 +88,8 @@ export function renderPlanMarkdown(goal: GoalTree): string {
   const tasksByDate = groupTasksByDate(plan.tasks);
   for (const [date, tasks] of tasksByDate) {
     lines.push(`### ${date}`, "");
-    lines.push("| 日期 | 时段 | 任务 | 科目 | 类型 | 预计分钟 | 实际分钟 | 状态 |");
-    lines.push("|---|---|---|---|---:|---:|---:|---|");
+    lines.push("| 日期 | 时段 | 任务 | 科目 | 类型 | 实际分钟 | 状态 |");
+    lines.push("|---|---|---|---|---:|---:|---|");
     for (const task of tasks) {
       lines.push(taskLine(task));
     }
@@ -102,6 +106,34 @@ export function renderPlanMarkdown(goal: GoalTree): string {
   );
 
   return lines.join("\n");
+}
+
+function writeHistoryPlanDocument(goal: GoalRow): string {
+  const tree = buildGoalTree(goal);
+  const content = renderPlanMarkdown(tree);
+  const documentPath = planDocumentPath(tree.id);
+  writeFile(documentPath, content);
+  return documentPath;
+}
+
+function deleteHistoryPlanDocuments(goalId: string): string[] {
+  const historyDir = path.join(getWorkspacePath(), "plans", "history");
+  let names: string[];
+  try {
+    names = fs.readdirSync(historyDir);
+  } catch (err) {
+    if (typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT") return [];
+    throw err;
+  }
+
+  const deleted: string[] = [];
+  for (const name of names) {
+    if (!name.endsWith(`-${goalId}.md`)) continue;
+    const documentPath = `plans/history/${name}`;
+    deleteFile(documentPath);
+    deleted.push(documentPath);
+  }
+  return deleted;
 }
 
 export function syncActivePlanDocument(): string | null {
@@ -130,7 +162,6 @@ export function listPlanVersions(): PlanVersionSummaryOut[] {
        wp.week_end AS week_end,
        COUNT(dt.id) AS task_count,
        SUM(CASE WHEN dt.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
-       COALESCE(SUM(dt.estimated_minutes), 0) AS estimated_minutes,
        COALESCE(SUM(dt.actual_minutes), 0) AS actual_minutes
      FROM goals g
      LEFT JOIN weekly_plans wp ON wp.goal_id = g.id
@@ -150,7 +181,6 @@ export function listPlanVersions(): PlanVersionSummaryOut[] {
     week_end: string | null;
     task_count: number;
     completed_count: number;
-    estimated_minutes: number;
     actual_minutes: number;
   }>;
 
@@ -164,7 +194,6 @@ export function listPlanVersions(): PlanVersionSummaryOut[] {
     week_end: row.week_end,
     task_count: row.task_count,
     completed_count: row.completed_count,
-    estimated_minutes: row.estimated_minutes,
     actual_minutes: row.actual_minutes,
     document_path: row.status === "active" ? "plans/current-plan.md" : planDocumentPath(row.goal_id),
   }));
@@ -183,4 +212,58 @@ export function restorePlanVersion(goalId: string): GoalTree {
   const active = getActiveGoal();
   if (!active) throw new PlanDocumentError("Active goal not found after restore");
   return buildGoalTree(active);
+}
+
+export function archivePlanVersion(goalId: string): { goal: GoalTree | null; documentPath: string } {
+  const goal = db.prepare("SELECT * FROM goals WHERE id = ?").get(goalId) as GoalRow | undefined;
+  if (!goal) throw new PlanDocumentError("Plan version not found");
+  if (goal.status !== "active") throw new PlanDocumentError("Only active plan can be archived");
+
+  db.prepare("UPDATE goals SET status = 'archived' WHERE id = ?").run(goalId);
+  const archivedGoal = db.prepare("SELECT * FROM goals WHERE id = ?").get(goalId) as GoalRow;
+  const documentPath = writeHistoryPlanDocument(archivedGoal);
+  const active = getActiveGoal();
+  return { goal: active ? buildGoalTree(active) : null, documentPath };
+}
+
+export function deletePlanVersion(goalId: string): { deletedGoalId: string; deletedDocumentPaths: string[] } {
+  const goal = db.prepare("SELECT * FROM goals WHERE id = ?").get(goalId) as GoalRow | undefined;
+  if (!goal) throw new PlanDocumentError("Plan version not found");
+  if (goal.status === "active") throw new ActivePlanDeleteError("Active plan cannot be deleted");
+
+  const trackIds = (db.prepare("SELECT id FROM tracks WHERE goal_id = ?").all(goalId) as Array<{ id: string }>).map((row) => row.id);
+  const moduleIds = trackIds.length
+    ? (db.prepare(`SELECT id FROM modules WHERE track_id IN (${trackIds.map(() => "?").join(",")})`).all(...trackIds) as Array<{ id: string }>).map((row) => row.id)
+    : [];
+  const weekIds = (db.prepare("SELECT id FROM weekly_plans WHERE goal_id = ?").all(goalId) as Array<{ id: string }>).map((row) => row.id);
+  const taskIds = weekIds.length
+    ? (db.prepare(`SELECT id FROM daily_tasks WHERE weekly_plan_id IN (${weekIds.map(() => "?").join(",")})`).all(...weekIds) as Array<{ id: string }>).map((row) => row.id)
+    : [];
+  const artifactIds = taskIds.length
+    ? (db.prepare(`SELECT id FROM learning_artifacts WHERE daily_task_id IN (${taskIds.map(() => "?").join(",")})`).all(...taskIds) as Array<{ id: string }>).map((row) => row.id)
+    : [];
+
+  db.transaction(() => {
+    if (artifactIds.length) db.prepare(`DELETE FROM error_candidates WHERE artifact_id IN (${artifactIds.map(() => "?").join(",")})`).run(...artifactIds);
+    if (taskIds.length) {
+      const placeholders = taskIds.map(() => "?").join(",");
+      db.prepare(`DELETE FROM error_candidates WHERE daily_task_id IN (${placeholders})`).run(...taskIds);
+      db.prepare(`DELETE FROM learning_artifacts WHERE daily_task_id IN (${placeholders})`).run(...taskIds);
+      db.prepare(`DELETE FROM task_feedback WHERE daily_task_id IN (${placeholders})`).run(...taskIds);
+    }
+    if (moduleIds.length) {
+      const placeholders = moduleIds.map(() => "?").join(",");
+      db.prepare(`DELETE FROM error_candidates WHERE module_id IN (${placeholders})`).run(...moduleIds);
+      db.prepare(`DELETE FROM error_records WHERE module_id IN (${placeholders})`).run(...moduleIds);
+      db.prepare(`DELETE FROM practice_sessions WHERE module_id IN (${placeholders})`).run(...moduleIds);
+    }
+    if (taskIds.length) db.prepare(`DELETE FROM daily_tasks WHERE id IN (${taskIds.map(() => "?").join(",")})`).run(...taskIds);
+    if (weekIds.length) db.prepare(`DELETE FROM weekly_plans WHERE id IN (${weekIds.map(() => "?").join(",")})`).run(...weekIds);
+    db.prepare("DELETE FROM student_profiles WHERE goal_id = ?").run(goalId);
+    if (moduleIds.length) db.prepare(`DELETE FROM modules WHERE id IN (${moduleIds.map(() => "?").join(",")})`).run(...moduleIds);
+    if (trackIds.length) db.prepare(`DELETE FROM tracks WHERE id IN (${trackIds.map(() => "?").join(",")})`).run(...trackIds);
+    db.prepare("DELETE FROM goals WHERE id = ?").run(goalId);
+  })();
+
+  return { deletedGoalId: goalId, deletedDocumentPaths: deleteHistoryPlanDocuments(goalId) };
 }

@@ -1,5 +1,7 @@
 # Akari V2 Feedback Design
 
+> 过程归档：本文件已合并进 `../../V2-design.md`，当前事实以根目录权威文档和代码为准。
+
 Last updated: 2026-06-11
 
 V2 turns normal study activity into structured feedback. The product should avoid a separate daily form as the primary workflow; feedback is captured where the user already is: task cards, uploaded materials, and chat.

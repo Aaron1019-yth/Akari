@@ -32,8 +32,8 @@ function formatTask(task: DailyTaskRow): string {
   };
   const slotLabel = slot[task.time_slot] || task.time_slot;
   const statusLabel = status[task.status] || task.status;
-  const actual = task.actual_minutes ? ` 实际${task.actual_minutes}分钟` : "";
-  return `- [${statusLabel}] ${task.title} (${slotLabel} 预计${task.estimated_minutes}分钟${actual}) [${task.id}]`;
+  const actual = task.actual_minutes ? ` 用时${task.actual_minutes}分钟` : "";
+  return `- [${statusLabel}] ${task.title} (${slotLabel}${actual}) [${task.id}]`;
 }
 
 // ── Tool Implementations ──
@@ -158,7 +158,6 @@ function createTaskTool(
   taskDate: string,
   timeSlot: string = "morning",
   subject: string = "综合",
-  estimatedMinutes: number = 60
 ): ToolResult {
   try {
     const goal = getActiveGoal();
@@ -173,7 +172,6 @@ function createTaskTool(
       title: title.slice(0, 15),
       type: "practice",
       subject,
-      estimated_minutes: estimatedMinutes,
       time_slot: timeSlot as TaskCreateRequest["time_slot"],
       date: taskDate,
       question_count: 0,
@@ -339,10 +337,6 @@ export function createPlannerTools(): ToolDef[] {
             enum: ["morning", "afternoon", "evening"],
           },
           subject: { type: "string", description: "科目" },
-          estimated_minutes: {
-            type: "integer",
-            description: "预计分钟，默认60",
-          },
         },
         required: ["title", "date"],
       },
@@ -351,8 +345,7 @@ export function createPlannerTools(): ToolDef[] {
           params.title as string,
           params.date as string,
           (params.time_slot as string) || "morning",
-          (params.subject as string) || "综合",
-          (params.estimated_minutes as number) ?? 60
+          (params.subject as string) || "综合"
         ),
     },
     {

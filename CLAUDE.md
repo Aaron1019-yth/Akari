@@ -109,12 +109,11 @@ shared/exam-schema.ts    # 前后端共享类型
 
 | 文档 | 内容 |
 |------|------|
-| `docs/Akari-spec-v1.roadmap.md` | **版本路线图**（V1/V1.1/V1.2/V2/V3） |
-| `docs/Akari-design-v1.handoff.md` | 交接文稿：当前状态、已验证流程、待完成项 |
-| `docs/Akari-spec-v1.completion_log.md` | 各阶段验收记录 |
-| `docs/Akari-v1-demo-script.md` | V1 演示与验收 checklist |
-| `docs/Akari-design-v2.feedback.md` | V2 学习反馈、错题归因与复盘设计草案 |
-| `docs/Akari-design-v2.plan_workspace.md` | V2 计划工作台、Markdown 同步、版本管理与粉笔导入设计 |
-| `docs/superpowers/specs/Akari-spec-v1.phase1_mvp.md` | Phase 1–3 功能规格（参考） |
-| `docs/superpowers/specs/Akari-design-v1.exam_agent.md` | 总体技术设计、数据模型、版权策略 |
-| `docs/superpowers/specs/Akari-design-v1.workspace.md` | Workspace 设计规格 |
+| `docs/README.md` | 文档入口、阅读顺序和权威规则 |
+| `docs/roadmap.md` | **总路线图**（V1/V1.1/V1.2/V2/V3） |
+| `docs/handoff.md` | 交接文稿：当前状态、已验证流程、待完成项 |
+| `docs/V1-design.md` | V1 当前架构与功能设计总结 |
+| `docs/V2-design.md` | V2 学习反馈、复盘素材、计划工作台与 Workspace 设计 |
+| `docs/P0-manual-acceptance.md` | P0 手动验收清单 |
+| `docs/V1-completion-log.md` | 历史阶段验收记录 |
+| `docs/superpowers/README.md` | brainstorm/spec/plan 过程归档说明，非当前事实入口 |

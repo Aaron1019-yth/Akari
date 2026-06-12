@@ -8,6 +8,8 @@ import type {
   DailyTaskRow,
   StudentProfileRow,
   GeneratePlanRequest,
+  ManualPlanRequest,
+  GoalPatchRequest,
   TaskPatchRequest,
   TaskCreateRequest,
   GoalTree,
@@ -90,6 +92,79 @@ function queryProfile(goalId: string): StudentProfileRow | undefined {
 
 function dailyTaskToOut(task: DailyTaskRow): DailyTaskOut {
   return task as DailyTaskOut;
+}
+
+function createGoalStructure(goalId: string, weaknesses: string[] = []): Record<string, ModuleRow> {
+  const moduleByName: Record<string, ModuleRow> = {};
+
+  for (let trackIndex = 0; trackIndex < TRACKS.length; trackIndex++) {
+    const [trackType, title, targetScore, moduleNames] = TRACKS[trackIndex];
+    const trackId = id("track");
+
+    db.prepare(
+      `INSERT INTO tracks (id, goal_id, type, title, target_score, current_score, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(trackId, goalId, trackType, title, targetScore, 0, trackIndex);
+
+    for (let moduleIndex = 0; moduleIndex < moduleNames.length; moduleIndex++) {
+      const name = moduleNames[moduleIndex];
+      const moduleId = id("module");
+      const proficiency = weaknesses.includes(name) ? 0.35 : 0.55;
+
+      const mod: ModuleRow = {
+        id: moduleId,
+        track_id: trackId,
+        name,
+        sort_order: moduleIndex,
+        weight: Math.round((1 / moduleNames.length) * 10000) / 10000,
+        correct_rate: 0,
+        total_questions: 0,
+        proficiency,
+      };
+
+      db.prepare(
+        `INSERT INTO modules (id, track_id, name, sort_order, weight, correct_rate, total_questions, proficiency)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        mod.id,
+        mod.track_id,
+        mod.name,
+        mod.sort_order,
+        mod.weight,
+        mod.correct_rate,
+        mod.total_questions,
+        mod.proficiency,
+      );
+
+      moduleByName[name] = mod;
+    }
+  }
+
+  return moduleByName;
+}
+
+function createStudentProfile(goalId: string, modules: ModuleRow[], strengths: string[] = [], weaknesses: string[] = []): void {
+  const proficiencies: Record<string, number> = {};
+  for (const mod of modules) {
+    proficiencies[mod.id] = mod.proficiency;
+  }
+
+  db.prepare(
+    `INSERT INTO student_profiles
+       (id, goal_id, strengths_json, weaknesses_json, module_proficiencies_json,
+        preferred_time_slots_json, avg_daily_study_minutes, learning_style, last_updated)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    `profile_${randomUUID().replace(/-/g, "")}`,
+    goalId,
+    JSON.stringify(strengths),
+    JSON.stringify(weaknesses),
+    JSON.stringify(proficiencies),
+    "[]",
+    0,
+    "steady",
+    new Date().toISOString(),
+  );
 }
 
 // ── Public API ──
@@ -202,7 +277,6 @@ export function buildPlanCard(): PlanCardPayload {
 /** Generate a new plan: archive old active goal, create goal/tracks/modules/Week1/profile. */
 export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
   const now = new Date().toISOString(); // UTC datetime for created_at / last_updated
-  const todayStr = toAppDateString();
 
   const goalRow = db.transaction(() => {
     // Archive any existing active goal
@@ -229,51 +303,7 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
       "active",
     );
 
-    // ── Tracks + Modules ──
-    const moduleByName: Record<string, ModuleRow> = {};
-
-    for (let trackIndex = 0; trackIndex < TRACKS.length; trackIndex++) {
-      const [trackType, title, targetScore, moduleNames] = TRACKS[trackIndex];
-      const trackId = id("track");
-
-      db.prepare(
-        `INSERT INTO tracks (id, goal_id, type, title, target_score, current_score, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(trackId, goalId, trackType, title, targetScore, 0, trackIndex);
-
-      for (let moduleIndex = 0; moduleIndex < moduleNames.length; moduleIndex++) {
-        const name = moduleNames[moduleIndex];
-        const moduleId = id("module");
-        const proficiency = payload.weaknesses.includes(name) ? 0.35 : 0.55;
-
-        const mod: ModuleRow = {
-          id: moduleId,
-          track_id: trackId,
-          name,
-          sort_order: moduleIndex,
-          weight: Math.round((1 / moduleNames.length) * 10000) / 10000,
-          correct_rate: 0,
-          total_questions: 0,
-          proficiency,
-        };
-
-        db.prepare(
-          `INSERT INTO modules (id, track_id, name, sort_order, weight, correct_rate, total_questions, proficiency)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(
-          mod.id,
-          mod.track_id,
-          mod.name,
-          mod.sort_order,
-          mod.weight,
-          mod.correct_rate,
-          mod.total_questions,
-          mod.proficiency,
-        );
-
-        moduleByName[name] = mod;
-      }
-    }
+    const moduleByName = createGoalStructure(goalId, payload.weaknesses);
 
     // ── Week 1 plan ──
     const { start: weekStart, end: weekEnd } = appWeekBounds();
@@ -316,8 +346,8 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
       db.prepare(
         `INSERT INTO daily_tasks
            (id, weekly_plan_id, module_id, date, title, type, subject,
-            question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            question_count, actual_minutes, time_slot, status, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         id("task"),
         weekId,
@@ -327,7 +357,6 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
         "practice",
         mod.name,
         mod.name !== "申论作文" ? 25 : 1,
-        mod.name !== "申论作文" ? 35 : 60,
         0,
         slots[offset % slots.length],
         "pending",
@@ -335,36 +364,72 @@ export function generateInitialPlan(payload: GeneratePlanRequest): GoalTree {
       );
     }
 
-    // ── Student profile ──
-    const allModules = Object.values(moduleByName);
-    const proficiencies: Record<string, number> = {};
-    for (const mod of allModules) {
-      proficiencies[mod.id] = mod.proficiency;
-    }
-
-    const profileId = `profile_${randomUUID().replace(/-/g, "")}`;
-    db.prepare(
-      `INSERT INTO student_profiles
-         (id, goal_id, strengths_json, weaknesses_json, module_proficiencies_json,
-          preferred_time_slots_json, avg_daily_study_minutes, learning_style, last_updated)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      profileId,
-      goalId,
-      JSON.stringify(payload.strengths),
-      JSON.stringify(payload.weaknesses),
-      JSON.stringify(proficiencies),
-      "[]",
-      0,
-      "steady",
-      now,
-    );
+    createStudentProfile(goalId, Object.values(moduleByName), payload.strengths, payload.weaknesses);
 
     // Reload goal row (matches Python db.refresh)
     return queryGoal(goalId)!;
   })();
 
   return buildGoalTree(goalRow);
+}
+
+export function createManualPlan(payload: ManualPlanRequest): GoalTree {
+  const now = new Date().toISOString();
+
+  const goalRow = db.transaction(() => {
+    const existing = db.prepare(
+      "SELECT * FROM goals WHERE status = 'active' LIMIT 1"
+    ).get() as GoalRow | undefined;
+    if (existing) {
+      db.prepare("UPDATE goals SET status = 'archived' WHERE id = ?").run(existing.id);
+    }
+
+    const goalId = id("goal");
+    db.prepare(
+      `INSERT INTO goals (id, title, description, target_score, current_estimated_score, exam_date, created_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(goalId, payload.title, payload.description, payload.target_score, 0, payload.exam_date, now, "active");
+
+    const moduleByName = createGoalStructure(goalId);
+    const { start: weekStart, end: weekEnd } = appWeekBounds();
+    db.prepare(
+      `INSERT INTO weekly_plans (id, goal_id, week_start, week_end, focus_areas_json, target_correct_rate, summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(id("week"), goalId, weekStart, weekEnd, "[]", 0.72, "手动建立的本周规划。可以按天添加任务并持续复盘。");
+
+    createStudentProfile(goalId, Object.values(moduleByName));
+    return queryGoal(goalId)!;
+  })();
+
+  return buildGoalTree(goalRow);
+}
+
+export function updateActiveGoal(payload: GoalPatchRequest): GoalTree {
+  const goal = getActiveGoal();
+  if (!goal) throw new Error("Active goal not found");
+
+  const fieldMap: [string, unknown][] = [
+    ["title", payload.title],
+    ["description", payload.description],
+    ["target_score", payload.target_score],
+    ["exam_date", payload.exam_date],
+  ];
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+
+  for (const [column, value] of fieldMap) {
+    if (value !== undefined) {
+      setClauses.push(`${column} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (setClauses.length) {
+    values.push(goal.id);
+    db.prepare(`UPDATE goals SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
+  }
+
+  return buildGoalTree(queryGoal(goal.id)!);
 }
 
 /** Return all tasks for a given ISO date string (YYYY-MM-DD), sorted by time_slot then sort_order. */
@@ -390,7 +455,6 @@ export function updateTask(taskId: string, payload: TaskPatchRequest): void {
     ["title", payload.title],
     ["type", payload.type],
     ["subject", payload.subject],
-    ["estimated_minutes", payload.estimated_minutes],
     ["date", payload.date],
   ];
 
@@ -472,8 +536,8 @@ export function createTask(goal: GoalRow, payload: TaskCreateRequest): DailyTask
     db.prepare(
       `INSERT INTO daily_tasks
          (id, weekly_plan_id, module_id, date, title, type, subject,
-          question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          question_count, actual_minutes, time_slot, status, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       taskId,
       weeklyPlan.id,
@@ -483,7 +547,6 @@ export function createTask(goal: GoalRow, payload: TaskCreateRequest): DailyTask
       payload.type,
       payload.subject,
       payload.question_count,
-      payload.estimated_minutes,
       0,
       payload.time_slot,
       "pending",
@@ -532,8 +595,8 @@ export function adaptNextWeek(goal: GoalRow): void {
       db.prepare(
         `INSERT INTO daily_tasks
            (id, weekly_plan_id, module_id, date, title, type, subject,
-            question_count, estimated_minutes, actual_minutes, time_slot, status, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            question_count, actual_minutes, time_slot, status, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         id("task"),
         weekId,
@@ -543,7 +606,6 @@ export function adaptNextWeek(goal: GoalRow): void {
         "practice",
         mod.name,
         30,
-        40,
         0,
         slots[offset % 3],
         "pending",

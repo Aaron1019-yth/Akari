@@ -14,26 +14,9 @@ const router = Router();
 
 // ── Helpers ──
 
-function getFlatFileList() {
+function getWorkspaceFileTree() {
   ensureWorkspace();
-  const tree = listTree();
-  const flat: Array<{ file_id: string; filename: string; file_path: string; size: number; uploaded_at: string }> = [];
-  function walk(nodes: typeof tree) {
-    for (const node of nodes) {
-      if (node.type === "file") {
-        flat.push({
-          file_id: node.path,
-          filename: node.name,
-          file_path: node.path,
-          size: node.size,
-          uploaded_at: node.modified_at,
-        });
-      }
-      if (node.children) walk(node.children);
-    }
-  }
-  walk(tree);
-  return flat;
+  return listTree();
 }
 
 // ── Legacy non-streaming POST ──
@@ -81,7 +64,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
     let abortController: AbortController | null = null;
     let currentTask: Promise<void> | null = null;
 
-    async function runLoop(text: string, sessionId: string = "default"): Promise<void> {
+    async function runLoop(text: string, sessionId: string = "default", displayText = text): Promise<void> {
       const ac = new AbortController();
       abortController = ac;
 
@@ -90,7 +73,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
 
         // ── QUERY_PLAN: return plan card immediately ──
         if (decision.intent === Intent.QUERY_PLAN) {
-          appendMessage(sessionId, "user", text);
+          appendMessage(sessionId, "user", displayText);
           const card = buildPlanCard();
           send(ws, { type: "plan_card", card });
           const reply = "我把当前计划放到右侧了。";
@@ -102,7 +85,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
 
         // ── PLAN: generate plan from diagnostic fields ──
         if (decision.intent === Intent.PLAN) {
-          appendMessage(sessionId, "user", text);
+          appendMessage(sessionId, "user", displayText);
           const result = generatePlanFromDiagnostic(
             decision.pending_fields as {
               weak_modules?: string[];
@@ -121,7 +104,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
             );
             appendMessage(sessionId, "assistant", reply);
             send(ws, { type: "text_delta", delta: reply });
-            send(ws, { type: "file_list", files: getFlatFileList() });
+            send(ws, { type: "file_list", files: getWorkspaceFileTree() });
             send(ws, { type: "turn_end", usage: {} });
             return;
           }
@@ -133,12 +116,12 @@ export function setupWebSocket(wss: WebSocketServer): void {
         const routeContext = buildRouteContext(decision);
 
         // ── Main agent loop ──
-        const events = agent.run(text, sessionId, routeContext, ac.signal);
+        const events = agent.run(text, sessionId, routeContext, ac.signal, displayText);
 
         for await (const event of events) {
           if (ac.signal.aborted) break;
           if (event.type === "turn_end") {
-            send(ws, { type: "file_list", files: getFlatFileList() });
+            send(ws, { type: "file_list", files: getWorkspaceFileTree() });
           }
           send(ws, event);
         }
@@ -153,7 +136,7 @@ export function setupWebSocket(wss: WebSocketServer): void {
     }
 
     ws.on("message", (raw) => {
-      let msg: { type?: string; text?: string; session_id?: string };
+      let msg: { type?: string; text?: string; display_text?: string; session_id?: string };
       try {
         msg = JSON.parse(raw.toString());
       } catch {
@@ -180,7 +163,8 @@ export function setupWebSocket(wss: WebSocketServer): void {
           currentTask.catch(() => {}); // suppress unhandled rejection
         }
 
-        currentTask = runLoop(text, sessionId);
+        const displayText = (msg.display_text || text).trim();
+        currentTask = runLoop(text, sessionId, displayText);
         currentTask.catch(() => {}); // suppress unhandled rejection
       } else if (t === "abort") {
         if (abortController) {
@@ -221,7 +205,27 @@ function send(ws: WebSocket, data: Record<string, unknown>): void {
   }
 }
 
+function buildFileRouteContext(intent: string): string {
+  const base = "# 文件意图路由\n附件已上传到工作区。先用 read_document 读取相关文件，再按本轮意图回答。";
+  switch (intent) {
+    case Intent.FILE_SUMMARY:
+      return `${base}\n意图：文件总结。只总结/梳理内容，不写入复盘数据。`;
+    case Intent.FILE_EXTRACT:
+      return `${base}\n意图：信息提取。按用户要求提取或结构化内容，不写入复盘数据。`;
+    case Intent.REVIEW_RECORD:
+      return `${base}\n意图：明确计入复盘。允许调用 record_pdf_review，confirmed_by_user 必须为 true；如果用户没有说明关联任务，daily_task_id 传 null。\n\n回复必须使用以下 Markdown 模板，缺失字段写"（暂无）"，不要新增段落或调整顺序：\n\n## 本次诊断\n- 主要问题：\n- 高频失误：\n- 不是知识点问题，而是：\n\n## 记忆清单\n1.\n2.\n3.\n\n## 回粉笔重做清单\n- 题号/题型：\n- 重做重点：\n- 不需要在 Akari 重做，回粉笔完成即可。\n\n## 明日计划建议\n- 建议增加：\n- 建议减少：\n- 暂不调整：`;
+    case Intent.TASK_LINK_REVIEW:
+      return `${base}\n意图：关联任务复盘。先确认要关联的今日任务；明确后才能调用 record_pdf_review。确认后回复同样使用上述四段式：本次诊断 / 记忆清单 / 回粉笔重做清单 / 明日计划建议。`;
+    case Intent.FILE_CHAT:
+      return `${base}\n意图：普通文件对话。回答用户问题；如果用户没说明用途，简短说明文件内容并询问下一步。不要写入复盘数据。`;
+    default:
+      return "";
+  }
+}
+
 function buildRouteContext(decision: { intent: string; missing_field: string | null; question: string; pending_fields: Record<string, unknown> }): string {
+  const fileContext = buildFileRouteContext(decision.intent);
+  if (fileContext) return fileContext;
   if (decision.intent !== Intent.ASK) return "";
 
   const fields: Record<string, unknown> = {};
@@ -235,6 +239,7 @@ function buildRouteContext(decision: { intent: string; missing_field: string | n
     "# 对话路由提示\n" +
     "用户正在建立备考计划，但信息还不完整。不要直接生成计划。" +
     "请先自然回应用户这句话，然后只追问一个最关键的缺失信息。" +
+    "如果这个追问适合选择题，请在回复末尾单独写一行：[选项: 选项1 | 选项2 | 选项3 | 不确定]。" +
     "不要像表单，不要提到 IntentClassifier、路由或内部状态。\n" +
     `- 当前缺失字段: ${decision.missing_field}\n` +
     `- 建议追问: ${decision.question}\n` +

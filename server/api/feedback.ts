@@ -1,19 +1,24 @@
 import { Router, Request, Response } from "express";
 import {
+  ErrorCandidateExtractRequest,
   ErrorCandidateGenerateRequest,
   ErrorCandidatePatchRequest,
   LearningArtifactRequest,
+  PdfReviewAnalyzeRequest,
   WeeklyReviewRequest,
 } from "../types.js";
 import {
+  analyzePdfReviewArtifact,
   createLearningArtifact,
   createWeeklyReview,
+  extractErrorCandidates,
   FeedbackError,
   generateErrorCandidate,
   getDailyFeedback,
   getWeeklyReview,
   listErrorCandidates,
   updateErrorCandidate,
+  writeDailyReviewDocument,
 } from "../services/feedback-service.js";
 import { toAppDateString } from "../services/date-utils.js";
 
@@ -36,6 +41,23 @@ router.post("/artifacts", (req: Request, res: Response) => {
   }
 });
 
+router.post("/artifacts/analyze-pdf-review", async (req: Request, res: Response) => {
+  const parsed = PdfReviewAnalyzeRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ detail: parsed.error.errors });
+    return;
+  }
+  try {
+    res.json(await analyzePdfReviewArtifact(parsed.data));
+  } catch (exc) {
+    if (exc instanceof FeedbackError) {
+      res.status(400).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
 router.post("/candidates/generate", (req: Request, res: Response) => {
   const parsed = ErrorCandidateGenerateRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -44,6 +66,23 @@ router.post("/candidates/generate", (req: Request, res: Response) => {
   }
   try {
     res.json({ candidate: generateErrorCandidate(parsed.data) });
+  } catch (exc) {
+    if (exc instanceof FeedbackError) {
+      res.status(400).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
+router.post("/candidates/extract", async (req: Request, res: Response) => {
+  const parsed = ErrorCandidateExtractRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ detail: parsed.error.errors });
+    return;
+  }
+  try {
+    res.json(await extractErrorCandidates(parsed.data));
   } catch (exc) {
     if (exc instanceof FeedbackError) {
       res.status(400).json({ detail: exc.message });
@@ -81,13 +120,35 @@ router.get("/daily", (req: Request, res: Response) => {
   res.json(getDailyFeedback(date));
 });
 
+router.post("/daily/document", (req: Request, res: Response) => {
+  const date = typeof req.body?.date === "string" ? req.body.date : toAppDateString();
+  try {
+    const result = writeDailyReviewDocument(date);
+    res.json(result);
+  } catch (exc) {
+    if (exc instanceof FeedbackError) {
+      res.status(400).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
+});
+
 router.post("/weekly", (req: Request, res: Response) => {
   const parsed = WeeklyReviewRequest.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ detail: parsed.error.errors });
     return;
   }
-  res.json({ review: createWeeklyReview(parsed.data) });
+  try {
+    res.json({ review: createWeeklyReview(parsed.data) });
+  } catch (exc) {
+    if (exc instanceof FeedbackError) {
+      res.status(400).json({ detail: exc.message });
+    } else {
+      res.status(500).json({ detail: "Internal error" });
+    }
+  }
 });
 
 router.get("/weekly", (req: Request, res: Response) => {

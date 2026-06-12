@@ -1,8 +1,7 @@
 import { Check, Clock3, Plus, Trash2, X } from "lucide-react";
-import { useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { DailyTask, ErrorCandidate, FileNode, GoalTree, PlanVersionSummary, TaskDifficulty, TaskFocus, TaskStatus, TaskType, TimeSlot } from "../../../../../shared/exam-schema";
-import type { DailyFeedbackResponse, WeeklyReviewResponse } from "../../services/types";
-import { formatAppDate, shortDate, slotLabel, taskDifficultyOptions, taskFocusOptions, taskTypeOptions, timeSlots } from "../../utils";
+import { shortDate, slotLabel, taskDifficultyOptions, taskFocusOptions, taskTypeOptions, timeSlots } from "../../utils";
 import { FilePreview } from "../workspace/FilePreview";
 import { FileTree } from "../workspace/FileTree";
 
@@ -28,41 +27,55 @@ interface WorkbenchProps {
   planVersionsLoading: boolean;
   planVersionsError: string | null;
   restoringPlanId: string | null;
+  archivingPlanId: string | null;
+  deletingPlanId: string | null;
+  manualPlanTitle: string;
+  manualPlanDescription: string;
+  manualPlanTargetScore: number;
+  manualPlanExamDate: string;
+  manualPlanSaving: boolean;
+  manualPlanError: string | null;
+  goalEditing: boolean;
+  goalDraftTitle: string;
+  goalDraftDescription: string;
+  goalSaving: boolean;
+  goalEditError: string | null;
   errorCandidates: ErrorCandidate[];
-  wrongQuestionText: string;
-  candidateLoading: boolean;
   candidateError: string | null;
   updatingCandidateId: string | null;
-  dailyFeedback: DailyFeedbackResponse | null;
-  weeklyReview: WeeklyReviewResponse["review"];
-  reviewLoading: boolean;
-  reviewError: string | null;
+  selectedPlanDate: string;
+  onSelectedPlanDateChange: (date: string) => void;
   onOpenPlanDocument: () => void;
+  onOpenDailyReview: () => void;
   onRefreshPlanVersions: () => void;
   onRestorePlanVersion: (goalId: string) => void;
-  onWrongQuestionTextChange: (text: string) => void;
-  onGenerateCandidate: () => void;
-  onGenerateCandidateFromCurrentFile: () => void;
+  onArchivePlanVersion: (goalId: string) => void;
+  onDeletePlanVersion: (goalId: string) => void;
+  onManualPlanTitleChange: (value: string) => void;
+  onManualPlanDescriptionChange: (value: string) => void;
+  onManualPlanTargetScoreChange: (value: number) => void;
+  onManualPlanExamDateChange: (value: string) => void;
+  onCreateManualPlan: () => void;
+  onGoalEditingChange: (editing: boolean) => void;
+  onGoalDraftTitleChange: (value: string) => void;
+  onGoalDraftDescriptionChange: (value: string) => void;
+  onSaveGoalMetadata: () => void;
   onRefreshCandidates: () => void;
   onConfirmCandidate: (candidate: ErrorCandidate) => void;
   onDismissCandidate: (candidate: ErrorCandidate) => void;
-  onRefreshStudyReview: () => void;
-  onGenerateWeeklyReview: () => void;
   viewMode: "today" | "week";
   onViewModeChange: (mode: "today" | "week") => void;
   draftSlot: TimeSlot | null;
   draftTitle: string;
   draftType: TaskType;
-  draftMinutes: number;
   onDraftSlotChange: (slot: TimeSlot | null) => void;
   onDraftTitleChange: (title: string) => void;
   onDraftTypeChange: (type: TaskType) => void;
-  onDraftMinutesChange: (minutes: number) => void;
   groupedTasks: Record<TimeSlot, DailyTask[]>;
   weekDays: Array<{ label: string; date: string }>;
   onUpdateTask: (task: DailyTask, status: TaskStatus) => void;
   onSaveTaskFeedback: (task: DailyTask, payload: { actual_minutes: number; difficulty: TaskDifficulty; focus: TaskFocus; note: string }) => void;
-  onEditTask: (task: DailyTask, patch: { title?: string; type?: TaskType; estimated_minutes?: number }) => void;
+  onEditTask: (task: DailyTask, patch: { title?: string; type?: TaskType }) => void;
   onDeleteTask: (task: DailyTask) => void;
   onMoveTask: (task: DailyTask, target: { date: string; time_slot: TimeSlot; beforeTaskId?: string; afterTaskId?: string }) => void;
   onAddTask: (slot: TimeSlot) => void;
@@ -103,36 +116,50 @@ export function Workbench({
   planVersionsLoading,
   planVersionsError,
   restoringPlanId,
+  archivingPlanId,
+  deletingPlanId,
+  manualPlanTitle,
+  manualPlanDescription,
+  manualPlanTargetScore,
+  manualPlanExamDate,
+  manualPlanSaving,
+  manualPlanError,
+  goalEditing,
+  goalDraftTitle,
+  goalDraftDescription,
+  goalSaving,
+  goalEditError,
   errorCandidates,
-  wrongQuestionText,
-  candidateLoading,
   candidateError,
   updatingCandidateId,
-  dailyFeedback,
-  weeklyReview,
-  reviewLoading,
-  reviewError,
+  selectedPlanDate,
+  onSelectedPlanDateChange,
   onOpenPlanDocument,
+  onOpenDailyReview,
   onRefreshPlanVersions,
   onRestorePlanVersion,
-  onWrongQuestionTextChange,
-  onGenerateCandidate,
-  onGenerateCandidateFromCurrentFile,
+  onArchivePlanVersion,
+  onDeletePlanVersion,
+  onManualPlanTitleChange,
+  onManualPlanDescriptionChange,
+  onManualPlanTargetScoreChange,
+  onManualPlanExamDateChange,
+  onCreateManualPlan,
+  onGoalEditingChange,
+  onGoalDraftTitleChange,
+  onGoalDraftDescriptionChange,
+  onSaveGoalMetadata,
   onRefreshCandidates,
   onConfirmCandidate,
   onDismissCandidate,
-  onRefreshStudyReview,
-  onGenerateWeeklyReview,
   viewMode,
   onViewModeChange,
   draftSlot,
   draftTitle,
   draftType,
-  draftMinutes,
   onDraftSlotChange,
   onDraftTitleChange,
   onDraftTypeChange,
-  onDraftMinutesChange,
   groupedTasks,
   weekDays,
   onUpdateTask,
@@ -168,6 +195,12 @@ export function Workbench({
     setDragOverKey((currentKey) => currentKey === nextKey ? currentKey : nextKey);
   }
 
+  function planVersionName(version: PlanVersionSummary) {
+    if (version.status === "active") return "当前计划";
+    const date = version.document_path.split("/").pop()?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? version.created_at.slice(0, 10);
+    return `${date} 历史计划`;
+  }
+
   function dropOnEmpty(date: string, timeSlot: TimeSlot) {
     if (!draggingTask) return;
     onMoveTask(draggingTask, { date, time_slot: timeSlot });
@@ -189,12 +222,9 @@ export function Workbench({
 
   return (
     <aside className="workbench">
-      <div className="workbench-title">
-        <strong>OH-WorkSpace</strong>
-      </div>
       <div className="panel-heading">
         <button className={activeWorkbenchTab === "plan" ? "active" : ""} onClick={() => onTabChange("plan")}>我的规划</button>
-        <button className={activeWorkbenchTab === "review" ? "active" : ""} onClick={() => onTabChange("review")}>复盘错题</button>
+        <button className={activeWorkbenchTab === "review" ? "active" : ""} onClick={() => onTabChange("review")}>复盘素材</button>
         <button className={activeWorkbenchTab === "workspace" ? "active" : ""} onClick={() => onTabChange("workspace")}>工作台</button>
       </div>
       {activeWorkbenchTab === "workspace" ? (
@@ -224,121 +254,114 @@ export function Workbench({
         </section>
       ) : activeWorkbenchTab === "review" ? (
         <section className="review-panel">
-          <section className="plan-card">
-            <h2>计划文件</h2>
-            <p>查看当前 Markdown 计划，或恢复历史计划版本。</p>
-            <div className="plan-document-actions">
-              <button onClick={onOpenPlanDocument}>打开计划文档</button>
-              <button onClick={onRefreshPlanVersions} disabled={planVersionsLoading}>
-                {planVersionsLoading ? "刷新中" : "刷新版本"}
-              </button>
-            </div>
-            <div className="plan-versions">
-              <div className="plan-versions-head">
-                <span>计划版本</span>
-                <strong>{planVersions.length}</strong>
+          <section className="review-entry-card">
+            <div className="review-entry-head">
+              <div>
+                <strong>今日复盘</strong>
+                <p>打开 reviews/ 目录下的当日复盘 Markdown。文件由对话中“入复盘”操作生成。</p>
               </div>
-              {planVersionsError && <p className="plan-version-error">{planVersionsError}</p>}
-              {planVersions.slice(0, 4).map((version) => (
-                <div className={version.status === "active" ? "plan-version active" : "plan-version"} key={`${version.goal_id}:${version.week_start ?? "none"}`}>
-                  <div>
-                    <strong>{version.status === "active" ? "当前计划" : "历史计划"}</strong>
-                    <span>{version.week_start ? `${shortDate(version.week_start)}-${shortDate(version.week_end ?? version.week_start)}` : "无周计划"} · {version.task_count} 项</span>
-                  </div>
-                  {version.status !== "active" && (
-                    <button disabled={restoringPlanId === version.goal_id} onClick={() => onRestorePlanVersion(version.goal_id)}>
-                      {restoringPlanId === version.goal_id ? "恢复中" : "恢复"}
-                    </button>
-                  )}
+              <button onClick={onOpenDailyReview}>打开当日复盘</button>
+            </div>
+            <p className="review-entry-hint">
+              复盘素材通过聊天附件勾选“入复盘”后自动归档到 review/ 文件夹；分析结果保存为 reviews/YYYY-MM-DD-daily-review.md。
+            </p>
+          </section>
+
+          {errorCandidates.length > 0 && (
+            <section className="error-candidate-panel">
+              <div className="error-candidate-head">
+                <div>
+                  <strong>待确认素材</strong>
+                  <p>聊天分拣后未确认的素材会出现在这里，作为兜底入口。</p>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="error-candidate-panel">
-            <div className="error-candidate-head">
-              <strong>错题归因</strong>
-              <button onClick={onRefreshCandidates}>刷新</button>
-            </div>
-            <textarea
-              value={wrongQuestionText}
-              onChange={(event) => onWrongQuestionTextChange(event.target.value)}
-              placeholder="粘贴错题、解析或你卡住的问题"
-            />
-            <button className="candidate-generate" disabled={!wrongQuestionText.trim() || candidateLoading} onClick={onGenerateCandidate}>
-              {candidateLoading ? "生成中" : "生成候选归因"}
-            </button>
-            <button className="candidate-from-file" disabled={!selectedPath || !previewContent?.trim() || candidateLoading} onClick={onGenerateCandidateFromCurrentFile}>
-              从当前文档生成
-            </button>
-            {candidateError && <p className="candidate-error">{candidateError}</p>}
-            <div className="candidate-list">
-              {errorCandidates.length === 0 ? (
-                <p className="candidate-empty">暂无待确认错题。</p>
-              ) : (
-                errorCandidates.slice(0, 3).map((candidate) => (
-                  <article className="candidate-item" key={candidate.id}>
-                    <strong>{candidate.subject || "待归类"}</strong>
-                    <p>{candidate.question_summary}</p>
-                    <span>{candidate.cause || "待确认错因"}</span>
-                    <div>
-                      <button disabled={updatingCandidateId === candidate.id} onClick={() => onConfirmCandidate(candidate)}>
-                        确认
-                      </button>
-                      <button disabled={updatingCandidateId === candidate.id} onClick={() => onDismissCandidate(candidate)}>
-                        驳回
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="study-review-panel">
-            <div className="study-review-head">
-              <strong>学习复盘</strong>
-              <button onClick={onRefreshStudyReview}>刷新</button>
-            </div>
-            <div className="study-review-stats">
-              <span>
-                <strong>{dailyFeedback?.stats.completed_count ?? todaySummary.completed}</strong>
-                今日完成
-              </span>
-              <span>
-                <strong>{dailyFeedback?.stats.actual_minutes ?? weeklySummary.completedMinutes}</strong>
-                反馈分钟
-              </span>
-              <span>
-                <strong>{dailyFeedback?.stats.hard_count ?? 0}</strong>
-                困难任务
-              </span>
-              <span>
-                <strong>{dailyFeedback?.stats.confirmed_error_count ?? 0}</strong>
-                已确认错因
-              </span>
-            </div>
-            {dailyFeedback?.stats.top_causes?.length ? (
-              <div className="study-review-causes">
-                {dailyFeedback.stats.top_causes.map((cause) => (
-                  <span key={cause}>{cause}</span>
+                <button onClick={onRefreshCandidates}>刷新</button>
+              </div>
+              {candidateError && <p className="candidate-error">{candidateError}</p>}
+              <div className="candidate-list">
+                {errorCandidates.slice(0, 5).map((candidate) => (
+                  <ReviewCandidateItem
+                    key={candidate.id}
+                    candidate={candidate}
+                    updating={updatingCandidateId === candidate.id}
+                    onConfirm={onConfirmCandidate}
+                    onDismiss={onDismissCandidate}
+                  />
                 ))}
               </div>
-            ) : null}
-            <div className="weekly-review-box">
-              <p>{weeklyReview?.summary || "本周复盘尚未生成。"}</p>
-              <button disabled={reviewLoading} onClick={onGenerateWeeklyReview}>
-                {reviewLoading ? "生成中" : weeklyReview ? "重新生成周复盘" : "生成周复盘"}
-              </button>
-            </div>
-            {reviewError && <p className="study-review-error">{reviewError}</p>}
+            </section>
+          )}
+
+          <section className="plan-versions-card">
+            <details className="plan-versions-collapse">
+              <summary>
+                <span>计划版本</span>
+                <strong>{planVersions.length}</strong>
+                <span className="plan-versions-summary-actions">
+                  <button onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenPlanDocument(); }}>
+                    打开文档
+                  </button>
+                  <button
+                    disabled={planVersionsLoading}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); onRefreshPlanVersions(); }}
+                  >
+                    {planVersionsLoading ? "刷新中" : "刷新"}
+                  </button>
+                </span>
+              </summary>
+              <div className="plan-versions">
+                {planVersionsError && <p className="plan-version-error">{planVersionsError}</p>}
+                {planVersions.slice(0, 4).map((version) => (
+                  <div className={version.status === "active" ? "plan-version active" : "plan-version"} key={`${version.goal_id}:${version.week_start ?? "none"}`}>
+                    <div>
+                      <strong>{planVersionName(version)}</strong>
+                      <span>{version.status === "active" ? "当前计划" : "历史计划"} · {version.week_start ? `${shortDate(version.week_start)}-${shortDate(version.week_end ?? version.week_start)}` : "无周计划"} · {version.task_count} 项</span>
+                    </div>
+                    <div className="plan-version-actions">
+                      {version.status === "active" ? (
+                        <button disabled={archivingPlanId === version.goal_id} onClick={() => onArchivePlanVersion(version.goal_id)}>
+                          {archivingPlanId === version.goal_id ? "归档中" : "归档"}
+                        </button>
+                      ) : (
+                        <>
+                          <button disabled={restoringPlanId === version.goal_id || deletingPlanId === version.goal_id} onClick={() => onRestorePlanVersion(version.goal_id)}>
+                            {restoringPlanId === version.goal_id ? "恢复中" : "恢复"}
+                          </button>
+                          <button className="plan-version-delete" disabled={restoringPlanId === version.goal_id || deletingPlanId === version.goal_id} onClick={() => onDeletePlanVersion(version.goal_id)}>
+                            {deletingPlanId === version.goal_id ? "删除中" : "删除"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
           </section>
         </section>
       ) : goal ? (
         <section className="plan-panel">
           <section className="plan-card compact-plan-card">
-            <h2>{goal.title || "暂无计划"}</h2>
-            <p>{goal.description || "从零开始搭建每日学习习惯，保持持续输入与输出。"}</p>
+            {goalEditing ? (
+              <div className="goal-editor">
+                <input value={goalDraftTitle} onChange={(event) => onGoalDraftTitleChange(event.target.value)} placeholder="目标名称" />
+                <textarea value={goalDraftDescription} onChange={(event) => onGoalDraftDescriptionChange(event.target.value)} placeholder="目标说明" />
+                {goalEditError && <p className="goal-edit-error">{goalEditError}</p>}
+                <div className="goal-editor-actions">
+                  <button disabled={goalSaving || !goalDraftTitle.trim()} onClick={onSaveGoalMetadata}>
+                    {goalSaving ? "保存中" : "保存目标"}
+                  </button>
+                  <button disabled={goalSaving} onClick={() => onGoalEditingChange(false)}>取消</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="plan-title-row">
+                  <h2>{goal.title || "暂无计划"}</h2>
+                  <button onClick={() => onGoalEditingChange(true)}>编辑</button>
+                </div>
+                <p>{goal.description || "从零开始搭建每日学习习惯，保持持续输入与输出。"}</p>
+              </>
+            )}
             <div className="plan-meta">
               <span>剩余 {daysLeft} 天</span>
               <span>进度 {planProgress}%</span>
@@ -364,19 +387,31 @@ export function Workbench({
 
           <section className="day-plan">
             <div className="day-header">
-              <time>{formatAppDate(new Date())}</time>
+              <time>{selectedPlanDate}</time>
               <div className="day-toggle">
                 <button className={viewMode === "today" ? "active" : ""} onClick={() => onViewModeChange("today")}>
-                  今日
+                  日视图
                 </button>
                 <button className={viewMode === "week" ? "active" : ""} onClick={() => onViewModeChange("week")}>
-                  本周
+                  周视图
                 </button>
               </div>
             </div>
 
             {viewMode === "today" ? (
               <>
+                <div className="day-chip-row">
+                  {weekDays.map((day) => (
+                    <button
+                      className={day.date === selectedPlanDate ? "active" : ""}
+                      key={day.date}
+                      onClick={() => onSelectedPlanDateChange(day.date)}
+                    >
+                      <span>{day.label}</span>
+                      <small>{shortDate(day.date)}</small>
+                    </button>
+                  ))}
+                </div>
                 {timeSlots.map((slot) => (
                   <div className="slot-group" key={slot}>
                     <div className="slot-label">
@@ -389,23 +424,20 @@ export function Workbench({
                       className={dragOverKey === `today:${slot}` ? "slot-tasks drag-over" : "slot-tasks"}
                       onDragOver={(event) => { allowDrop(event); setDragOver(`today:${slot}`); }}
                       onDragLeave={() => setDragOver(null)}
-                      onDrop={() => dropOnEmpty(formatAppDate(new Date()), slot)}
+                      onDrop={() => dropOnEmpty(selectedPlanDate, slot)}
                     >
                       {draftSlot === slot && (
                         <div className="task-editor">
                           <span className="task-checkbox" />
                           <div className="editor-fields">
                             <input autoFocus value={draftTitle} onChange={(event) => onDraftTitleChange(event.target.value)} placeholder="任务名" />
-                            <div>
-                              <select value={draftType} onChange={(event) => onDraftTypeChange(event.target.value as TaskType)}>
-                                {taskTypeOptions.map((item) => (
-                                  <option key={item.value} value={item.value}>
-                                    {item.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <input type="number" min={0} value={draftMinutes} onChange={(event) => onDraftMinutesChange(Number(event.target.value))} />
-                            </div>
+                            <select value={draftType} onChange={(event) => onDraftTypeChange(event.target.value as TaskType)}>
+                              {taskTypeOptions.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <button className="icon-commit" aria-label="保存任务" onClick={() => onAddTask(slot)}>
                             <Check size={18} />
@@ -451,10 +483,13 @@ export function Workbench({
                     const tasks = goal?.weekly_plan?.tasks.filter((task) => task.date === day.date) ?? [];
                     return (
                       <section className="week-day" key={day.date}>
-                        <header>
+                        <button
+                          className="week-day-header"
+                          onClick={() => { onSelectedPlanDateChange(day.date); onViewModeChange("today"); }}
+                        >
                           <strong>{day.label}</strong>
                           <span>{shortDate(day.date)}</span>
-                        </header>
+                        </button>
                         <div
                           className={dragOverKey === `week:${day.date}` ? "week-day-body drag-over" : "week-day-body"}
                           onDragOver={(event) => { allowDrop(event); setDragOver(`week:${day.date}`); }}
@@ -517,9 +552,65 @@ export function Workbench({
           )}
         </section>
       ) : (
-        <p className="muted">生成计划后，这里会显示知识树和任务列表。</p>
+        <section className="plan-panel">
+          <section className="manual-plan-card">
+            <div>
+              <span className="manual-plan-kicker">无需先和 Agent 对话</span>
+              <h2>手动建立规划</h2>
+              <p>先把目标和本周容器建起来，再按天添加任务、记录完成反馈、沉淀复盘素材。</p>
+            </div>
+            <label>
+              <span>目标名称</span>
+              <input value={manualPlanTitle} onChange={(event) => onManualPlanTitleChange(event.target.value)} />
+            </label>
+            <label>
+              <span>目标说明</span>
+              <textarea value={manualPlanDescription} onChange={(event) => onManualPlanDescriptionChange(event.target.value)} />
+            </label>
+            <div className="manual-plan-grid">
+              <label>
+                <span>目标分</span>
+                <input type="number" min={1} max={300} value={manualPlanTargetScore} onChange={(event) => onManualPlanTargetScoreChange(Number(event.target.value))} />
+              </label>
+              <label>
+                <span>考试日期</span>
+                <input type="date" value={manualPlanExamDate} onChange={(event) => onManualPlanExamDateChange(event.target.value)} />
+              </label>
+            </div>
+            {manualPlanError && <p className="manual-plan-error">{manualPlanError}</p>}
+            <button className="manual-plan-submit" disabled={manualPlanSaving || !manualPlanTitle.trim()} onClick={onCreateManualPlan}>
+              {manualPlanSaving ? "创建中" : "创建手动规划"}
+            </button>
+          </section>
+        </section>
       )}
     </aside>
+  );
+}
+
+function ReviewCandidateItem({
+  candidate,
+  updating,
+  onConfirm,
+  onDismiss,
+}: {
+  candidate: ErrorCandidate;
+  updating: boolean;
+  onConfirm: (candidate: ErrorCandidate) => void;
+  onDismiss: (candidate: ErrorCandidate) => void;
+}) {
+  return (
+    <article className="candidate-item">
+      <div>
+        <strong>{candidate.question_summary || candidate.mistake_summary || "手动复盘素材"}</strong>
+        <span>{candidate.cause || "待归类"}</span>
+      </div>
+      <p>{candidate.suggested_fix || candidate.mistake_summary || "确认后会进入日/周复盘素材。"}</p>
+      <div>
+        <button disabled={updating} onClick={() => onConfirm(candidate)}>加入复盘</button>
+        <button disabled={updating} onClick={() => onDismiss(candidate)}>忽略</button>
+      </div>
+    </article>
   );
 }
 
@@ -542,7 +633,7 @@ function TaskCard({
   checkboxSize: number;
   onUpdateTask: (task: DailyTask, status: TaskStatus) => void;
   onSaveTaskFeedback: (task: DailyTask, payload: { actual_minutes: number; difficulty: TaskDifficulty; focus: TaskFocus; note: string }) => void;
-  onEditTask: (task: DailyTask, patch: { title?: string; type?: TaskType; estimated_minutes?: number }) => void;
+  onEditTask: (task: DailyTask, patch: { title?: string; type?: TaskType }) => void;
   onDeleteTask: (task: DailyTask) => void;
   onOpenTimer: (task: DailyTask) => void;
   isDragging: boolean;
@@ -553,18 +644,38 @@ function TaskCard({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [type, setType] = useState<TaskType>(task.type);
-  const [minutes, setMinutes] = useState(task.estimated_minutes);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackMinutes, setFeedbackMinutes] = useState(task.actual_minutes || task.estimated_minutes || 30);
   const [feedbackDifficulty, setFeedbackDifficulty] = useState<TaskDifficulty>("ok");
   const [feedbackFocus, setFeedbackFocus] = useState<TaskFocus>("normal");
   const [feedbackNote, setFeedbackNote] = useState("");
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const stackRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!feedbackOpen) return undefined;
+
+    function handleMouseDown(event: MouseEvent) {
+      if (!stackRef.current?.contains(event.target as Node)) {
+        setFeedbackOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFeedbackOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [feedbackOpen]);
 
   function save() {
     if (!title.trim()) return;
-    onEditTask(task, { title: title.trim(), type, estimated_minutes: minutes });
+    onEditTask(task, { title: title.trim(), type });
     setEditing(false);
   }
 
@@ -573,7 +684,7 @@ function TaskCard({
     setFeedbackError(null);
     try {
       await onSaveTaskFeedback(task, {
-        actual_minutes: Math.max(0, feedbackMinutes),
+        actual_minutes: task.actual_minutes || 0,
         difficulty: feedbackDifficulty,
         focus: feedbackFocus,
         note: feedbackNote.trim(),
@@ -593,7 +704,14 @@ function TaskCard({
       return;
     }
     if (variant === "daily") {
-      setFeedbackMinutes(task.actual_minutes || task.estimated_minutes || 30);
+      if (feedbackOpen) {
+        setFeedbackOpen(false);
+        return;
+      }
+      setFeedbackDifficulty("ok");
+      setFeedbackFocus("normal");
+      setFeedbackNote("");
+      setFeedbackError(null);
       setFeedbackOpen(true);
       return;
     }
@@ -606,14 +724,11 @@ function TaskCard({
         <span className="task-checkbox" />
         <div className="editor-fields compact-task-editor">
           <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") save(); if (event.key === "Escape") setEditing(false); }} />
-          <div>
-            <select value={type} onChange={(event) => setType(event.target.value as TaskType)}>
-              {taskTypeOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-            <input type="number" min={0} value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} />
-          </div>
+          <select value={type} onChange={(event) => setType(event.target.value as TaskType)}>
+            {taskTypeOptions.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
         </div>
         <button className="icon-commit" aria-label="保存任务" onClick={save}><Check size={18} /></button>
         <button className="icon-muted" aria-label="取消编辑" onClick={() => setEditing(false)}><X size={18} /></button>
@@ -623,7 +738,7 @@ function TaskCard({
 
 
   return (
-    <div className="task-card-stack">
+    <div className="task-card-stack" ref={stackRef}>
     <div
       className={`${task.status === "completed" ? "daily-task compact-task done" : "daily-task compact-task"}${variant === "week" ? " week-compact-task" : ""}${isDragging ? " is-dragging" : ""}`}
       draggable
@@ -643,7 +758,7 @@ function TaskCard({
       </button>
       <div className="task-main">
         <strong>{task.title}</strong>
-        <span className="task-details">{taskTypeOptions.find((item) => item.value === task.type)?.label ?? task.type} · {task.actual_minutes ? `${task.actual_minutes}/${task.estimated_minutes}` : task.estimated_minutes} 分</span>
+        <span className="task-details">{taskTypeOptions.find((item) => item.value === task.type)?.label ?? task.type}{task.actual_minutes ? ` · ${task.actual_minutes} 分` : " · 未计时"}</span>
       </div>
       {variant === "daily" && (
         <div className="task-actions">
@@ -658,17 +773,9 @@ function TaskCard({
     </div>
     {feedbackOpen && variant === "daily" && (
       <div className="task-feedback-panel" onDoubleClick={(event) => event.stopPropagation()}>
-        <div className="feedback-row">
-          <label>
-            <span>实际</span>
-            <input
-              type="number"
-              min={0}
-              value={feedbackMinutes}
-              onChange={(event) => setFeedbackMinutes(Number(event.target.value))}
-            />
-          </label>
-          <div className="feedback-segment" aria-label="难度">
+        <div className="feedback-row" aria-label="难度">
+          <span className="feedback-row-label">难度</span>
+          <div className="feedback-segment">
             {taskDifficultyOptions.map(({ value, label }) => (
               <button
                 key={value}
@@ -680,29 +787,29 @@ function TaskCard({
             ))}
           </div>
         </div>
-        <div className="feedback-segment wide" aria-label="状态">
-          {taskFocusOptions.map(({ value, label }) => (
-            <button
-              key={value}
-              className={feedbackFocus === value ? "active" : ""}
-              onClick={() => setFeedbackFocus(value)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="feedback-row" aria-label="状态">
+          <span className="feedback-row-label">状态</span>
+          <div className="feedback-segment">
+            {taskFocusOptions.map(({ value, label }) => (
+              <button
+                key={value}
+                className={feedbackFocus === value ? "active" : ""}
+                onClick={() => setFeedbackFocus(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <textarea
           value={feedbackNote}
           onChange={(event) => setFeedbackNote(event.target.value)}
-          placeholder="一句话复盘：哪里顺、哪里卡住了"
+          placeholder="留一句给之后的自己：这次最值得记住的是什么？"
         />
         {feedbackError && <p className="feedback-error">{feedbackError}</p>}
         <div className="feedback-actions">
           <button className="feedback-save" disabled={feedbackSaving} onClick={() => void saveFeedback()}>
-            {feedbackSaving ? "保存中" : "完成并记录"}
-          </button>
-          <button className="feedback-skip" disabled={feedbackSaving} onClick={() => { setFeedbackOpen(false); onUpdateTask(task, "completed"); }}>
-            跳过
+            {feedbackSaving ? "记录中" : "记录完成"}
           </button>
         </div>
       </div>

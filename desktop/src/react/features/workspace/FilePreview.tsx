@@ -1,7 +1,18 @@
 import { useMemo } from "react";
 import { FileText, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { formatFileSize, getPathName, isMarkdownFile, splitWorkspacePath } from "../../utils";
+
+const markdownPlugins = [remarkGfm];
+
+function countLines(content: string): number {
+  let count = 1;
+  for (let index = 0; index < content.length; index++) {
+    if (content.charCodeAt(index) === 10) count++;
+  }
+  return count;
+}
 
 interface FilePreviewProps {
   path: string | null;
@@ -13,6 +24,9 @@ interface FilePreviewProps {
 }
 
 export function FilePreview({ path, content, mime, size, loading, onClose }: FilePreviewProps) {
+  const isImage = mime.startsWith("image/");
+  const lineCount = useMemo(() => content && !isImage ? countLines(content) : 0, [content, isImage]);
+
   if (!path) {
     return (
       <div className="file-preview empty">
@@ -25,7 +39,6 @@ export function FilePreview({ path, content, mime, size, loading, onClose }: Fil
   const isMarkdown = isMarkdownFile(path, mime);
   const fileName = getPathName(path);
   const breadcrumbs = splitWorkspacePath(path);
-  const lineCount = useMemo(() => content ? content.split("\n").length : 0, [content]);
 
   return (
     <div className="file-preview vscode-preview">
@@ -51,9 +64,13 @@ export function FilePreview({ path, content, mime, size, loading, onClose }: Fil
           <p className="muted">加载中...</p>
         ) : content === null ? (
           <p className="error">无法加载文件内容</p>
+        ) : isImage ? (
+          <div className="image-preview-frame">
+            <img src={content} alt={fileName} />
+          </div>
         ) : isMarkdown ? (
           <div className="markdown-body editor-markdown">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={markdownPlugins}>{content}</ReactMarkdown>
           </div>
         ) : (
           <pre className="code-block editor-code"><code>{content}</code></pre>

@@ -1,5 +1,7 @@
 # Backend Node.js/TypeScript 迁移计划
 
+> 过程归档：本文件是历史迁移计划，当前事实以 `../../README.md` 指向的根目录文档和代码为准。
+
 > **Goal:** 将 Python/FastAPI 后端重写为 Node.js/TypeScript，API 路径、WebSocket 协议、数据库 schema 完全不变
 
 **Architecture:** Express + `ws`（共用端口）+ better-sqlite3（裸 SQL）+ Zod（校验）+ fetch（HTTP 客户端）。前端零改动。
@@ -567,7 +569,7 @@ Translation from `backend/services/planner_service.py` (327 lines). 8 张表的 
 
 - [ ] **Step 1: 验证全部通过** — `npm run build && npm run test:api`
 - [ ] **Step 2: 删除 Python 文件**
-- [ ] **Step 3: 更新 Akari-design-v1.handoff.md + CLAUDE.md**
+- [ ] **Step 3: 更新 handoff.md + CLAUDE.md**
 
 ---
 

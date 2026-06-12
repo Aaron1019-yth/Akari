@@ -56,13 +56,13 @@ npm run dev:desktop
 
 Settings 会保存到 `.akari/config.json`，优先级高于环境变量。
 
-## V1 演示流程
+## V1 快速 smoke
 
-完整演示脚本见 `docs/Akari-v1-demo-script.md`。最短路径：
+完整验收入口见 `docs/P0-manual-acceptance.md`。最短路径：
 
 1. 新建会话，告诉 Akari 考试目标、每日学习时间、当前水平和薄弱模块。
 2. 等待 Agent 生成一周计划，并在右侧「我的规划」查看今日/本周任务。
-3. 编辑、完成、拖拽任务，记录一次番茄钟时长。
+3. 编辑、完成、拖拽任务，记录一次任务反馈。
 4. 上传 PDF/DOCX/Markdown/TXT 文件，在工作台预览。
 5. 在聊天中要求 Agent 读取 workspace 文档并结合计划给建议。
 
@@ -100,15 +100,12 @@ bash scripts/fix-electron-macos.sh
 
 ## 设计文件
 
-- `docs/Akari-spec-v1.roadmap.md`：**版本路线图**（V1 已冻结，V2/V3 后续范围）。
-- `docs/Akari-spec-v1.completion_log.md`：V1 各阶段验收记录。
-- `docs/Akari-v1-demo-script.md`：V1 演示与验收 checklist。
-- `docs/Akari-design-v2.feedback.md`：V2 学习反馈、错题归因与复盘设计草案。
-- `docs/Akari-design-v2.plan_workspace.md`：V2 计划工作台、Markdown 同步、版本管理与粉笔导入设计。
-- `docs/superpowers/specs/Akari-spec-v1.phase1_mvp.md`：**Phase 1–3 MVP 完整规格（当前路线图）**。
-- `docs/superpowers/specs/Akari-design-v1.exam_agent.md`：总体技术设计、架构决策、版权策略。
-- `docs/superpowers/specs/Akari-design-v1.workspace.md`：Workspace 文件系统设计。
-- `docs/superpowers/specs/Akari-api-v1.domain_model.md`：API 契约、领域模型、数据流。
-- `docs/superpowers/specs/Akari-spec-v1.originality.md`：原创性与迁移审计边界。
-- `docs/Akari-design-v1.handoff.md`：交接文稿（当前状态、已验证流程、待完成项）。
+- `docs/README.md`：文档入口、阅读顺序和权威规则。
+- `docs/roadmap.md`：**总路线图**（V1 已冻结，V2/V3 后续范围）。
+- `docs/handoff.md`：交接文稿（当前状态、已验证流程、待完成项）。
+- `docs/V1-design.md`：V1 当前架构与功能设计总结。
+- `docs/V2-design.md`：V2 学习反馈、复盘素材、计划工作台与 Workspace 设计。
+- `docs/P0-manual-acceptance.md`：P0 手动验收清单。
+- `docs/V1-completion-log.md`：V1 各阶段历史验收记录。
+- `docs/superpowers/README.md`：brainstorm/spec/plan 过程归档说明，非当前事实入口。
 - `CLAUDE.md`：项目规则手册（AI 协作用）。

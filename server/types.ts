@@ -23,7 +23,7 @@ export type UiTheme = z.infer<typeof UiTheme>;
 export const TaskDifficulty = z.enum(["easy", "ok", "hard"]);
 export type TaskDifficulty = z.infer<typeof TaskDifficulty>;
 
-export const TaskFocus = z.enum(["focused", "normal", "distracted", "tired"]);
+export const TaskFocus = z.enum(["focused", "normal", "distracted"]);
 export type TaskFocus = z.infer<typeof TaskFocus>;
 
 export const LearningArtifactSource = z.enum(["workspace_file", "chat", "manual"]);
@@ -88,7 +88,6 @@ export interface DailyTaskRow {
   type: string;
   subject: string;
   question_count: number;
-  estimated_minutes: number;
   actual_minutes: number;
   time_slot: string;
   status: string;
@@ -163,6 +162,12 @@ export interface ErrorCandidateRow {
   daily_task_id: string | null;
   module_id: string | null;
   subject: string;
+  question_type: string;
+  review_kind: string;
+  question_text: string;
+  user_answer: string;
+  correct_answer: string;
+  choice_reason: string;
   question_summary: string;
   mistake_summary: string;
   cause: string;
@@ -195,6 +200,22 @@ export const GeneratePlanRequest = z.object({
 });
 export type GeneratePlanRequest = z.infer<typeof GeneratePlanRequest>;
 
+export const ManualPlanRequest = z.object({
+  title: z.string().min(1),
+  description: z.string().default(""),
+  target_score: z.number().int().min(1).max(300),
+  exam_date: z.string(),
+});
+export type ManualPlanRequest = z.infer<typeof ManualPlanRequest>;
+
+export const GoalPatchRequest = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  target_score: z.number().int().min(1).max(300).optional(),
+  exam_date: z.string().optional(),
+});
+export type GoalPatchRequest = z.infer<typeof GoalPatchRequest>;
+
 export const TaskPatchRequest = z.object({
   status: TaskStatus.optional(),
   actual_minutes: z.number().int().min(0).optional(),
@@ -203,7 +224,6 @@ export const TaskPatchRequest = z.object({
   title: z.string().min(1).optional(),
   type: TaskType.optional(),
   subject: z.string().optional(),
-  estimated_minutes: z.number().int().min(0).optional(),
   date: z.string().optional(),
 });
 export type TaskPatchRequest = z.infer<typeof TaskPatchRequest>;
@@ -212,7 +232,6 @@ export const TaskCreateRequest = z.object({
   title: z.string().min(1),
   type: TaskType,
   subject: z.string(),
-  estimated_minutes: z.number().int().min(0),
   question_count: z.number().int().min(0).default(0),
   time_slot: TimeSlot,
   date: z.string().optional(),
@@ -274,11 +293,30 @@ export const ErrorCandidateGenerateRequest = z.object({
 });
 export type ErrorCandidateGenerateRequest = z.infer<typeof ErrorCandidateGenerateRequest>;
 
+export const ErrorCandidateExtractRequest = z.object({
+  artifact_id: z.string(),
+  daily_task_id: z.string().nullable().optional(),
+  hint: z.string().default(""),
+});
+export type ErrorCandidateExtractRequest = z.infer<typeof ErrorCandidateExtractRequest>;
+
+export const PdfReviewAnalyzeRequest = z.object({
+  artifact_id: z.string(),
+  hint: z.string().default(""),
+});
+export type PdfReviewAnalyzeRequest = z.infer<typeof PdfReviewAnalyzeRequest>;
+
 export const ErrorCandidatePatchRequest = z.object({
   status: ErrorCandidateStatus.optional(),
   daily_task_id: z.string().nullable().optional(),
   module_id: z.string().nullable().optional(),
   subject: z.string().optional(),
+  question_type: z.string().optional(),
+  review_kind: z.string().optional(),
+  question_text: z.string().optional(),
+  user_answer: z.string().optional(),
+  correct_answer: z.string().optional(),
+  choice_reason: z.string().optional(),
   question_summary: z.string().optional(),
   mistake_summary: z.string().optional(),
   cause: z.string().optional(),
@@ -347,7 +385,6 @@ export const DailyTaskOut = z.object({
   type: TaskType,
   subject: z.string(),
   question_count: z.number().int(),
-  estimated_minutes: z.number().int(),
   actual_minutes: z.number().int(),
   time_slot: TimeSlot,
   status: TaskStatus,
@@ -467,6 +504,12 @@ export const ErrorCandidateOut = z.object({
   daily_task_id: z.string().nullable(),
   module_id: z.string().nullable(),
   subject: z.string(),
+  question_type: z.string(),
+  review_kind: z.string(),
+  question_text: z.string(),
+  user_answer: z.string(),
+  correct_answer: z.string(),
+  choice_reason: z.string(),
   question_summary: z.string(),
   mistake_summary: z.string(),
   cause: z.string(),
@@ -491,6 +534,42 @@ export const StudyReviewOut = z.object({
 });
 export type StudyReviewOut = z.infer<typeof StudyReviewOut>;
 
+export const PdfReviewPriority = z.enum(["high", "medium", "low"]);
+export type PdfReviewPriority = z.infer<typeof PdfReviewPriority>;
+
+export const PdfReviewReport = z.object({
+  overview: z.string(),
+  weak_points: z.array(z.object({
+    area: z.string(),
+    evidence: z.string(),
+    diagnosis: z.string(),
+    priority: PdfReviewPriority,
+  })),
+  memory_items: z.array(z.object({
+    item: z.string(),
+    reason: z.string(),
+    review_method: z.string(),
+  })),
+  fenbi_redo_actions: z.array(z.object({
+    title: z.string(),
+    reason: z.string(),
+    source_hint: z.string(),
+  })),
+  plan_suggestions: z.array(z.object({
+    suggestion: z.string(),
+    reason: z.string(),
+  })),
+  source_warnings: z.array(z.string()),
+});
+export type PdfReviewReport = z.infer<typeof PdfReviewReport>;
+
+export const PdfReviewAnalyzeResponse = z.object({
+  artifact: LearningArtifactOut,
+  review: StudyReviewOut,
+  report: PdfReviewReport,
+});
+export type PdfReviewAnalyzeResponse = z.infer<typeof PdfReviewAnalyzeResponse>;
+
 export const PlanVersionSummaryOut = z.object({
   goal_id: z.string(),
   title: z.string(),
@@ -501,7 +580,6 @@ export const PlanVersionSummaryOut = z.object({
   week_end: z.string().nullable(),
   task_count: z.number().int(),
   completed_count: z.number().int(),
-  estimated_minutes: z.number().int(),
   actual_minutes: z.number().int(),
   document_path: z.string(),
 });

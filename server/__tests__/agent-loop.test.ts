@@ -75,7 +75,6 @@ describe("generate_plan validation", () => {
         title: "资料分析训练",
         type: "practice",
         subject: "资料分析",
-        estimated_minutes: 45,
         time_slot: "afternoon",
         date: "2026-06-09",
       }],
@@ -83,22 +82,6 @@ describe("generate_plan validation", () => {
     expect(error).toBeNull();
     expect(plan).not.toBeNull();
     expect(plan!.tasks).toHaveLength(1);
-  });
-
-  it("rejects estimated_minutes over 360", () => {
-    const { error } = validateGeneratedPlan({
-      week_start: "2026-06-09",
-      tasks: [{
-        title: "marathon",
-        type: "study",
-        subject: "test",
-        estimated_minutes: 999,
-        time_slot: "morning",
-        date: "2026-06-09",
-      }],
-    });
-    expect(error).toBeTruthy();
-    expect(error).toContain("estimated_minutes");
   });
 });
 
